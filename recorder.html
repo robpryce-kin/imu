@@ -175,6 +175,7 @@ summary { cursor: pointer; font-weight: 600; }
       <canvas id="rev" aria-label="Graph of the recorded trial. Uses the same lines as chosen above the live graph." role="img"></canvas>
       <div class="row">
         <button type="button" class="primary" id="btn-save">Save file (.csv)</button>
+        <button type="button" id="btn-share" hidden>Share file (Save to Files)</button>
         <button type="button" id="btn-copy">Copy data</button>
         <button type="button" id="btn-discard">Discard and record again</button>
       </div>
@@ -747,7 +748,21 @@ function parseSeriesCsv(text, unitsOpt) {
     var url = URL.createObjectURL(blob), a = document.createElement('a');
     a.href = url; a.download = st.fname; document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
-    toast('Saved ' + st.fname + '. Check your Downloads folder.');
+    toast('Saved ' + st.fname + '.' + (canShareFiles ? ' If you cannot find it, use Share file and choose Save to Files.' : ' Check your Downloads folder.'));
+  });
+  /* Phones: the share sheet can save to Files, AirDrop, email or Drive, which is more reliable than a download link on iPhone */
+  var canShareFiles = false;
+  try { canShareFiles = !!(navigator.canShare && navigator.share && navigator.canShare({ files: [new File(['a'], 'a.csv', { type: 'text/csv' })] })); } catch (e) {}
+  if (canShareFiles) {
+    $('btn-share').hidden = false;
+    if (navigator.maxTouchPoints > 0 && /iPhone|iPad|Android|Mobile|Macintosh/.test(navigator.userAgent) && window.matchMedia('(pointer: coarse)').matches) { $('btn-share').className = 'primary'; $('btn-save').className = ''; }
+  }
+  $('btn-share').addEventListener('click', function () {
+    if (!st.final) return;
+    var file = new File([buildCsv(st.final.pts)], st.fname, { type: 'text/csv' });
+    navigator.share({ files: [file], title: st.fname }).then(function () { toast('Shared ' + st.fname + '.'); }, function (e) {
+      if (e && e.name !== 'AbortError') toast('Sharing did not work here. Try Save file or Copy data.');
+    });
   });
   $('btn-copy').addEventListener('click', function () {
     if (!st.final) return;
