@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KIN-2201 Sensor Tools</title>
+<style>
+:root { --bg:#f1f4f6; --surface:#fff; --ink:#14202b; --muted:#566574; --line:#d5dce2; --accent:#0b6e79; --accent-ink:#fff; }
+@media (prefers-color-scheme: dark) { :root { --bg:#0e161c; --surface:#152028; --ink:#e6edf2; --muted:#94a5b3; --line:#2a3a46; --accent:#4cc2cf; --accent-ink:#08262b; color-scheme:dark; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:32px 16px; }
+main { max-width:640px; margin:0 auto; display:flex; flex-direction:column; gap:16px; }
+h1 { font-size:26px; margin:0; } p { margin:0; color:var(--muted); }
+a.card { display:block; background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:16px; text-decoration:none; color:var(--ink); }
+a.card:hover, a.card:focus-visible { border-color:var(--accent); outline:none; }
+a.card b { display:block; font-size:18px; color:var(--accent); } a.card span { color:var(--muted); font-size:14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>KIN-2201 Sensor Tools</h1>
+  <p>Open the recorder in Chrome or Edge on a laptop or Android phone (or Bluefy on an iPhone). The analyzer works in any browser.</p>
+  <a class="card" href="recorder.html"><b>IMU Recorder</b><span>Connect a WitMotion sensor, watch the acceleration live, record and save a file.</span></a>
+  <a class="card" href="analyzer.html"><b>Motion Data Analyzer</b><span>Open a saved file and analyze it.</span></a>
+</main>
+</body>
+</html>
