@@ -41,6 +41,8 @@ p { margin: 0; }
 .lede { color: var(--muted); max-width: 64ch; margin-top: 4px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+#demo-vid { text-align: center; margin-top: 10px; }
+#demo-note:empty { display: none; }
 .muted { color: var(--muted); } .small { font-size: 13px; }
 button { font: inherit; font-weight: 500; cursor: pointer; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 7px; padding: 8px 14px; }
 button:hover:not(:disabled) { border-color: var(--accent); }
@@ -115,7 +117,7 @@ summary { cursor: pointer; font-weight: 600; }
   <section class="card" aria-labelledby="hdemo">
     <h2 id="hdemo">2. Demos</h2>
     <div class="row small">
-      <span class="muted">No sensor? Try a demo (real recorded data):</span>
+      <span class="muted">No sensor? Try a demo (select from menu):</span>
       <select id="demo-sel" aria-label="Demo data">
         <option value="axes">Axis shaking</option>
         <option value="rest">Gravity and resting positions</option>
@@ -133,12 +135,14 @@ summary { cursor: pointer; font-weight: 600; }
         <select id="demo-units"><option value="auto">guess</option><option value="ms2">m/s&sup2;</option><option value="g">g</option></select>
       </label>
     </div>
+    <p class="small" style="margin:8px 0 4px">Hit start and real sensor data will play in the 3. Streaming Acceleration window below.</p>
     <p class="small muted" id="demo-note"></p>
     <div id="demo-vid" hidden>
-      <p class="small" style="margin:8px 0 4px"><strong>Watch how the sensor was moved</strong> (recorded together with this data)</p>
-      <video id="demo-video" controls playsinline muted preload="none" style="display:block;width:100%;max-width:260px;max-height:70vh;border-radius:8px;background:#000"></video>
+      <p class="small" style="margin:0 0 6px"><strong>Watch how the sensor was moved. Hit play in the video below.</strong></p>
+      <video id="demo-video" controls playsinline muted preload="none" style="display:block;margin:0 auto;width:100%;max-width:260px;max-height:70vh;border-radius:8px;background:#000"></video>
       <p class="small muted" id="demo-vid-err" hidden>The video could not be loaded. Check that you opened the app from its web address, and that the video files are in the same place as the app.</p>
     </div>
+    <p class="small" id="demo-novid" style="text-align:center;margin:10px 0 0" hidden><strong>No video available.</strong></p>
   </section>
 
   <section class="card" aria-labelledby="h2c">
@@ -645,7 +649,7 @@ function parseSeriesCsv(text, unitsOpt) {
   Object.keys(REAL).forEach(function (k) {
     var r = REAL[k], n = r.x.length;
     /* Played back one recorded sample at a time at the rate it was recorded, so a 10 Hz recording looks like 10 Hz. */
-    DEMOS[k] = { note: r.note + ' It repeats in a loop.', dur: n * r.dt, rate: 1 / r.dt, fn: function (t) {
+    DEMOS[k] = { note: '', dur: n * r.dt, rate: 1 / r.dt, fn: function (t) {
       var i = Math.round(t / r.dt); if (i > n - 1) i = n - 1; if (i < 0) i = 0;
       return [r.x[i] / 100, r.y[i] / 100, r.z[i] / 100];
     } };
@@ -699,7 +703,7 @@ function parseSeriesCsv(text, unitsOpt) {
   var VIDEOS = { axes: 'Axis_Shaking.mp4', rest: 'Gravity_and_Resting_Positions.mp4', updown: 'Up_and_Down.mp4', curl: 'Bicep_Curl.mp4', hcurl: 'Horizontal_Bicep_Curl.mp4', roll: 'Rolling.mp4', rollshake: 'Rolling_and_Shaking.mp4' };
   function showVideo() {
     var k = $('demo-sel').value, v = $('demo-video'), box = $('demo-vid'), err = $('demo-vid-err');
-    err.hidden = true; v.pause();
+    err.hidden = true; v.pause(); $('demo-novid').hidden = !(k !== 'file' && !VIDEOS[k]);
     if (!VIDEOS[k]) { box.hidden = true; v.removeAttribute('src'); v.load(); return; }
     box.hidden = false; v.setAttribute('src', VIDEOS[k]); v.load();
   }
