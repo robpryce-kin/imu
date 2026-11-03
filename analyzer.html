@@ -241,8 +241,16 @@ canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor:
       <label class="field" id="f-fc" hidden>Cutoff frequency (Hz)
         <input type="number" id="fc" value="5" min="0.1" step="0.1" style="width:100px">
       </label>
+      <label class="field">Remove gravity
+        <select id="rm-g">
+          <option value="">No</option>
+          <option value="x">From the X axis</option>
+          <option value="y">From the Y axis</option>
+          <option value="z">From the Z axis</option>
+        </select>
+      </label>
     </div>
-    <p class="small muted" style="max-width:70ch">A <b>low-pass</b> filter keeps movement below the cutoff frequency and removes everything above it, such as sensor noise or vibrations. A <b>high-pass</b> filter removes anything below the cutoff, such as a slow drift, and keeps everything above it.</p>
+    <p class="small muted" style="max-width:70ch">A <b>low-pass</b> filter keeps movement below the cutoff frequency and removes everything above it, such as sensor noise or vibrations. A <b>high-pass</b> filter removes anything below the cutoff, such as a slow drift, and keeps everything above it. <b>Remove gravity</b> subtracts gravity from the axis you choose before the resultant is calculated.</p>
   </section>
 
   <section class="card" aria-labelledby="h-res">
@@ -360,7 +368,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor:
     <details class="acc">
     <summary id="h-bal">7. Postural sway</summary>
     <div class="acc-body">
-    <p class="small muted">Use this to estimate balance outcomes using an accelerometer. Use the two horizontal axes. Note: balance trials are usually 20 to 30 seconds long.</p>
+    <p class="small muted">Use this to estimate balance outcomes using an accelerometer. Use the two horizontal axes. Outcomes are in milli-g (mg): 1000 mg = 1 g = 9.81 m/s². Note: balance trials are usually 20 to 30 seconds long.</p>
     <div class="grid-fields">
       <label class="field">Side to side
         <select id="bal-ml"><option value="x" selected>X</option><option value="y">Y</option><option value="z">Z</option><option value="r">Resultant</option></select>
@@ -374,9 +382,9 @@ canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor:
       <button type="button" id="btn-bal-png">Save stabilogram (PNG)</button>
     </div>
     <div class="fftbox" aria-live="polite">
-      <div><span class="fl">Path length (m/s²)</span><span class="fv" id="bal-path">–</span></div>
-      <div><span class="fl">Mean path velocity (m/s³)</span><span class="fv" id="bal-vel">–</span></div>
-      <div><span class="fl">95% ellipse area ((m/s²)²)</span><span class="fv" id="bal-area">–</span></div>
+      <div><span class="fl">Path length (mg)</span><span class="fv" id="bal-path">–</span></div>
+      <div><span class="fl">Mean path velocity (mg/s)</span><span class="fv" id="bal-vel">–</span></div>
+      <div><span class="fl">95% ellipse area (mg²)</span><span class="fv" id="bal-area">–</span></div>
     </div>
     <div class="stab" id="stab-wrap"><canvas id="chart-b" role="img" aria-label="Stabilogram: side-to-side acceleration against front-to-back acceleration, with the 95% confidence ellipse"></canvas></div>
     </div>
@@ -470,7 +478,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor:
   var D = null, view = [0, 1], sel = [0, 1];
   var show = { x: true, y: true, z: true, r: true };
   var hoverT = null, drag = null, geo = null, hz = 0, toastTimer = null;
-  var RAW = null, filt = { mode: 'none', sec: 0, fc: 5 };
+  var RAW = null, filt = { mode: 'none', sec: 0, fc: 5, g: '' };
   var lastPeaks = [], lastPkRate = '', lastCalc = null, lastFft = null, pkAuto = true, calcAuto = true, lastBal = null, REPS = [];
 
   /* ---------- parsing ---------- */
@@ -613,6 +621,9 @@ canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor:
     return out;
   }
   function filterLabel() {
+    return filt.g ? (filt.mode === 'none' ? '' : filterLabel0() + '; ') + 'gravity (9.81 m/s²) removed from the ' + filt.g.toUpperCase() + ' axis' : filterLabel0();
+  }
+  function filterLabel0() {
     return filt.mode === 'ma' ? filt.sec + ' s moving average' : filt.mode === 'lp' ? 'low-pass 4th order Butterworth, ' + filt.fc + ' Hz cutoff' : filt.mode === 'hp' ? 'high-pass 4th order Butterworth, ' + filt.fc + ' Hz cutoff' : 'none';
   }
   /* Build the arrays the app works from: optionally filtered copies of X, Y, Z plus the resultant. */
@@ -625,6 +636,13 @@ canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor:
       fn = function (a) { return butter(a, rate, fc, f.mode === 'hp'); };
     }
     var x = fn(src.x), y = fn(src.y), z = fn(src.z);
+    if (f.g) {
+      var ga = f.g === 'x' ? x : f.g === 'y' ? y : z, raw = src[f.g], cnt = 0, sm = 0, q;
+      for (q = 0; q < src.n && src.t[q] <= 1; q++) { sm += raw[q]; cnt++; }
+      if (!cnt || Math.abs(sm / cnt) < 5) { sm = 0; cnt = src.n; for (q = 0; q < src.n; q++) sm += raw[q]; }
+      var gs = sm < 0 ? -9.81 : 9.81;
+      for (q = 0; q < src.n; q++) ga[q] -= gs;
+    }
     var r = new Array(src.n);
     for (var i = 0; i < src.n; i++) r[i] = Math.sqrt(x[i] * x[i] + y[i] * y[i] + z[i] * z[i]);
     return { t: src.t, x: x, y: y, z: z, r: r, n: src.n };
@@ -719,7 +737,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor:
     });
     var dur = S.t1 - S.t0;
     $('window-info').textContent = 'Window ' + S.t0.toFixed(2) + ' to ' + S.t1.toFixed(2) + ' s (' + dur.toFixed(2) + ' s, ' + S.n +
-      ' samples). Largest resultant: ' + fmt(S.out.r.max, 2) + ' m/s² at ' + S.out.r.tmax.toFixed(2) + ' s.' + (filt.mode !== 'none' ? ' Filter: ' + filterLabel() + '.' : '');
+      ' samples). Largest resultant: ' + fmt(S.out.r.max, 2) + ' m/s² at ' + S.out.r.tmax.toFixed(2) + ' s.' + ((filt.mode !== 'none' || filt.g) ? ' Filter: ' + filterLabel() + '.' : '');
     return S;
   }
 
@@ -1082,8 +1100,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor:
     var a = D[k1], b = D[k2], n = w.n, i, m1 = 0, m2 = 0;
     for (i = w.lo; i <= w.hi; i++) { m1 += a[i]; m2 += b[i]; }
     m1 /= n; m2 /= n;
-    var u = new Float64Array(n), v = new Float64Array(n);
-    for (i = 0; i < n; i++) { u[i] = a[w.lo + i] - m1; v[i] = b[w.lo + i] - m2; }
+    var u = new Float64Array(n), v = new Float64Array(n), MG = 1000 / 9.81;   /* m/s² to milli-g (mg) */
+    for (i = 0; i < n; i++) { u[i] = (a[w.lo + i] - m1) * MG; v[i] = (b[w.lo + i] - m2) * MG; }
     var pu = 0, pv = 0, pt = 0, sxx = 0, syy = 0, sxy = 0, sd = 0, maxd = 0, sq = 0, umin = Infinity, umax = -Infinity, vmin = Infinity, vmax = -Infinity, maxAbs = 0;
     for (i = 0; i < n; i++) {
       sxx += u[i] * u[i]; syy += v[i] * v[i]; sxy += u[i] * v[i];
@@ -1106,12 +1124,12 @@ canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor:
   function balRows(S) {
     var v = S.dur > 0 ? S.dur : NaN;
     return [
-      ['Path length', S.path, 'm/s²', 3], ['Path length, side to side', S.pathU, 'm/s²', 3], ['Path length, front to back', S.pathV, 'm/s²', 3],
-      ['Mean path velocity', S.path / v, 'm/s³', 3], ['Mean velocity, side to side', S.pathU / v, 'm/s³', 3], ['Mean velocity, front to back', S.pathV / v, 'm/s³', 3],
-      ['RMS distance from centre', S.rmsD, 'm/s²', 4], ['RMS side to side', S.rmsU, 'm/s²', 4], ['RMS front to back', S.rmsV, 'm/s²', 4],
-      ['Range side to side', S.rangeU, 'm/s²', 4], ['Range front to back', S.rangeV, 'm/s²', 4],
-      ['Largest distance from centre', S.maxD, 'm/s²', 4],
-      ['95% ellipse area', S.area, '(m/s²)²', 5], ['Ellipse long axis (full length)', 2 * S.A, 'm/s²', 4], ['Ellipse short axis (full length)', 2 * S.B, 'm/s²', 4],
+      ['Path length', S.path, 'mg', 1], ['Path length, side to side', S.pathU, 'mg', 1], ['Path length, front to back', S.pathV, 'mg', 1],
+      ['Mean path velocity', S.path / v, 'mg/s', 2], ['Mean velocity, side to side', S.pathU / v, 'mg/s', 2], ['Mean velocity, front to back', S.pathV / v, 'mg/s', 2],
+      ['RMS distance from centre', S.rmsD, 'mg', 2], ['RMS side to side', S.rmsU, 'mg', 2], ['RMS front to back', S.rmsV, 'mg', 2],
+      ['Range side to side', S.rangeU, 'mg', 2], ['Range front to back', S.rangeV, 'mg', 2],
+      ['Largest distance from centre', S.maxD, 'mg', 2],
+      ['95% ellipse area', S.area, 'mg²', 2], ['Ellipse long axis (full length)', 2 * S.A, 'mg', 2], ['Ellipse short axis (full length)', 2 * S.B, 'mg', 2],
       ['Samples inside the ellipse', S.inside, '%', 1]
     ];
   }
@@ -1169,9 +1187,9 @@ canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor:
     ctx.fillText('○ start   ■ end' + (showEll ? '   - - 95% CI' : ''), x0 + 8 * k, y0 + 16 * k);
     var nm = { x: 'X', y: 'Y', z: 'Z', r: 'Resultant' };
     ctx.fillStyle = th.muted; ctx.textAlign = 'center';
-    ctx.fillText('Side to side, ' + nm[S.ax[0]] + ' (m/s²)', x0 + size / 2, y0 + size + 36 * k);
+    ctx.fillText('Side to side, ' + nm[S.ax[0]] + ' (mg)', x0 + size / 2, y0 + size + 36 * k);
     ctx.save(); ctx.translate(14 * k, y0 + size / 2); ctx.rotate(-Math.PI / 2);
-    ctx.fillText('Front to back, ' + nm[S.ax[1]] + ' (m/s²)', 0, 0); ctx.restore();
+    ctx.fillText('Front to back, ' + nm[S.ax[1]] + ' (mg)', 0, 0); ctx.restore();
     if (title) { ctx.fillStyle = th.ink; ctx.font = 'bold ' + (16 * k) + 'px "IBM Plex Sans", "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.fillText(title, W / 2, 26 * k); }
   }
   function balTheme() {
@@ -1194,7 +1212,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor:
     var ax = [$('bal-ml').value, $('bal-ap').value], S = balCompute(w, ax[0], ax[1]), nm = { x: 'X', y: 'Y', z: 'Z', r: 'Resultant' };
     S.ax = ax; S.label = 'Side to side = ' + nm[ax[0]] + ', front to back = ' + nm[ax[1]]; S.t0 = D.t[w.lo]; S.t1 = D.t[w.hi];
     lastBal = S;
-    $('bal-path').textContent = fmt(S.path, 2); $('bal-vel').textContent = fmt(S.path / S.dur, 3); $('bal-area').textContent = fmt(S.area, 4);
+    $('bal-path').textContent = fmt(S.path, 1); $('bal-vel').textContent = fmt(S.path / S.dur, 2); $('bal-area').textContent = fmt(S.area, 2);
     drawBal();
   }
 
@@ -1544,7 +1562,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor:
   }
   function windowRows() {
     var S = stats(); if (!S) return null;
-    var off = $('zero-t').checked ? S.t0 : 0, w = win(), c = null, head = ['Time (s)', 'X (m/s2)', 'Y (m/s2)', 'Z (m/s2)', 'Resultant (m/s2)'];
+    var off = $('zero-t').checked ? S.t0 : 0, w = win(), c = null, head = ['Time (s)', NAMES.x.replace(' − g', ' minus g') + ' (m/s2)', NAMES.y.replace(' − g', ' minus g') + ' (m/s2)', NAMES.z.replace(' − g', ' minus g') + ' (m/s2)', 'Resultant (m/s2)'];
     if (lastCalc && w) { c = calcArrays(w, lastCalc.key, lastCalc.off); head.push(NAMES[lastCalc.key] + ' minus offset (m/s2)', 'Running area (m/s)', 'Rate of change (m/s3)'); }
     var R = [head];
     for (var i = S.lo; i <= S.hi; i++) {
@@ -1557,7 +1575,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor:
   $('btn-dl-res').addEventListener('click', function () { var R = resultsRows(); if (!R) { toast('Choose a window with at least two samples first.'); return; } download(baseName() + '_results.csv', toTable(R, ',')); });
   $('btn-dl-data').addEventListener('click', function () { var R = windowRows(); if (!R) { toast('Choose a window with at least two samples first.'); return; } download(baseName() + '_window.csv', toTable(R, ',')); });
   $('btn-copy-res').addEventListener('click', function () { var R = resultsRows(); if (!R) { toast('Choose a window with at least two samples first.'); return; } copyText(toTable(R, '\t'), 'Results table'); });
-  $('btn-copy-data').addEventListener('click', function () { var R = windowRows(); if (!R) { toast('Choose a window with at least two samples first.'); return; } copyText(toTable(R, '\t'), 'Window data (' + (R.length - 1) + ' rows' + (filt.mode !== 'none' ? ', filtered' : '') + ')'); });
+  $('btn-copy-data').addEventListener('click', function () { var R = windowRows(); if (!R) { toast('Choose a window with at least two samples first.'); return; } copyText(toTable(R, '\t'), 'Window data (' + (R.length - 1) + ' rows' + ((filt.mode !== 'none' || filt.g) ? ', filtered' : '') + ')'); });
   $('btn-dl-png').addEventListener('click', function () {
     if (!D) { toast('Load a file first.'); return; }
     var h = hoverT; hoverT = null; draw();
@@ -1634,6 +1652,11 @@ canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor:
     fc = Math.max(0.1, Math.round(fc * 10) / 10);
     filt.fc = fc;
     $('f-fc').hidden = !(v === 'lp' || v === 'hp');
+    filt.g = $('rm-g').value;
+    ['x', 'y', 'z'].forEach(function (k) {
+      NAMES[k] = k.toUpperCase() + (filt.g === k ? ' − g' : '');
+      var c = document.querySelector('label.chip[style*="--s' + k + '"]'); if (c) c.lastChild.textContent = NAMES[k];
+    });
     if (RAW) { D = derive(RAW, filt); renderAll(); }
   }
   $('smooth').addEventListener('change', function () {
@@ -1641,6 +1664,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor:
     if ($('smooth').value === 'hp' && !$('fc').dataset.touched) $('fc').value = '0.5';
     applyFilter();
   });
+  $('rm-g').addEventListener('change', applyFilter);
   $('fc').addEventListener('input', function () { $('fc').dataset.touched = '1'; applyFilter(); });
   $('fc').addEventListener('change', function () { var f = parseFloat($('fc').value); if (f > 0) $('fc').value = Math.max(0.1, Math.round(f * 10) / 10).toFixed(1); applyFilter(); });
   ['pk-sig', 'pk-mode'].forEach(function (id) { $(id).addEventListener('change', function () { pkAuto = true; reanalyze(); }); });
