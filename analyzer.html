@@ -1,0 +1,1681 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IMU Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: one working column. Load file, check chart, drag a window, read the table. */
+:root {
+  --bg: #f1f4f6;
+  --surface: #ffffff;
+  --ink: #14202b;
+  --muted: #566574;
+  --line: #d5dce2;
+  --accent: #0b6e79;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(11, 110, 121, 0.13);
+  --sx: #c8372d;
+  --sy: #1f8a52;
+  --sz: #2b62cf;
+  --sr: #14202b;
+  --cur: #c26a12;
+  --warn-bg: #fff3d6;
+  --warn-ink: #6b4500;
+  --grid: #e3e8ec;
+  --f-display: "Bricolage Grotesque", "Segoe UI", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e161c;
+    --surface: #152028;
+    --ink: #e6edf2;
+    --muted: #94a5b3;
+    --line: #2a3a46;
+    --accent: #4cc2cf;
+    --accent-ink: #08262b;
+    --accent-soft: rgba(76, 194, 207, 0.2);
+    --sx: #ff7a6e;
+    --sy: #5fd08e;
+    --sz: #7aa2ff;
+    --sr: #e6edf2;
+    --cur: #f2a65a;
+    --warn-bg: #3a2e12;
+    --warn-ink: #f2d38a;
+    --grid: #22303b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e161c;
+  --surface: #152028;
+  --ink: #e6edf2;
+  --muted: #94a5b3;
+  --line: #2a3a46;
+  --accent: #4cc2cf;
+  --accent-ink: #08262b;
+  --accent-soft: rgba(76, 194, 207, 0.2);
+  --sx: #ff7a6e;
+  --sy: #5fd08e;
+  --sz: #7aa2ff;
+  --sr: #e6edf2;
+  --cur: #f2a65a;
+  --warn-bg: #3a2e12;
+  --warn-ink: #f2d38a;
+  --grid: #22303b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: 28px; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--f-display); font-weight: 600; font-size: 17px; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.lede { color: var(--muted); max-width: 62ch; margin-top: 4px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+button, .btn {
+  font: inherit; font-weight: 500; cursor: pointer;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 7px; padding: 7px 12px;
+}
+button:hover, .btn:hover { border-color: var(--accent); }
+button.primary, .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button:focus-visible, .btn:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, canvas:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+input[type="number"], select {
+  font: inherit; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; min-width: 0;
+}
+input[type="number"] { width: 104px; font-family: var(--f-mono); }
+input[type="text"] { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; min-width: 0; width: 200px; }
+.hint { color: var(--muted); font-size: 12px; max-width: 46ch; }
+.mini { position: relative; height: 200px; width: 100%; }
+.mini canvas { cursor: default; }
+.btn.file { display: inline-block; }
+[hidden] { display: none !important; }
+label.field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); letter-spacing: 0.02em; }
+label.field select { max-width: 100%; }
+.drop {
+  border: 1.5px dashed var(--line); border-radius: 8px; padding: 14px;
+  display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center;
+}
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.pill { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--warn-bg); color: var(--warn-ink); }
+.notes { display: flex; flex-direction: column; gap: 6px; }
+.note { background: var(--warn-bg); color: var(--warn-ink); border-radius: 6px; padding: 7px 10px; font-size: 13px; }
+.err { background: var(--warn-bg); color: var(--warn-ink); border-radius: 6px; padding: 8px 10px; font-weight: 500; }
+details { border-top: 1px solid var(--line); padding-top: 10px; }
+details.acc { border-top: 0; padding-top: 0; }
+details.acc > summary { font-family: var(--f-display); font-weight: 600; font-size: 17px; }
+.acc-body { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+details summary { cursor: pointer; font-weight: 600; }
+.grid-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
+.scroll { overflow-x: auto; max-width: 100%; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { font-weight: 600; color: var(--muted); font-size: 12px; letter-spacing: 0.03em; }
+td { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+td:first-child { font-family: var(--f-body); font-weight: 600; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; background: var(--c); }
+table.preview td, table.preview th { font-size: 12px; padding: 4px 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px 3px 9px; cursor: pointer; font-weight: 500; }
+.chip input { accent-color: var(--c); margin: 0; }
+.chip .sw { margin: 0; }
+.chart-wrap { position: relative; height: 340px; width: 100%; }
+.fftbox { display: flex; flex-wrap: wrap; gap: 12px; }
+.fftbox > div { border: 1px solid var(--line); border-radius: 8px; padding: 8px 16px; min-width: 190px; background: var(--bg); }
+.fftbox .fl { display: block; font-size: 12px; color: var(--muted); letter-spacing: 0.02em; }
+.fftbox .fv { display: block; font-family: var(--f-mono); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stab { position: relative; width: 100%; max-width: 500px; aspect-ratio: 1 / 1; margin: 0 auto; }
+.ovlist { display: flex; flex-direction: column; gap: 6px; }
+.ovrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 13px; }
+.ovrow input[type="text"] { width: 170px; }
+.ovrow .meta { color: var(--muted); font-family: var(--f-mono); font-size: 12px; }
+.ovrow button { padding: 3px 9px; }
+canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor: crosshair; }
+.readout { min-height: 22px; overflow-wrap: anywhere; font-family: var(--f-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg label { padding: 6px 11px; cursor: pointer; font-weight: 500; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label:has(input:checked) { background: var(--accent); color: var(--accent-ink); }
+.seg label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+.formulas { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 20px; margin-top: 10px; }
+.formulas div { min-width: 0; }
+.formulas b { display: block; }
+.formulas .mono { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+#copybox { display: none; flex-direction: column; gap: 6px; }
+#copybox textarea { width: 100%; height: 110px; font-family: var(--f-mono); font-size: 12px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+#toast { min-height: 20px; font-size: 13px; color: var(--accent); font-weight: 500; }
+@media (max-width: 520px) {
+  h1 { font-size: 24px; }
+  .chart-wrap { height: 280px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+@media (max-width: 640px) { .readout { min-height: 40px; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>IMU Analyzer</h1>
+    <p class="lede">Load an acceleration file from a WitMotion IMU (or any other time, x, y, z data formatted as a csv).</p>
+  </header>
+
+  <section class="card" aria-labelledby="h-load">
+    <h2 id="h-load">1. Load your data</h2>
+    <div class="drop" id="drop">
+      <label class="btn primary" for="file">Choose file</label>
+      <input type="file" id="file" accept=".csv,.txt,.tsv,.dat,text/*" hidden>
+      <span class="muted small">or drop a .csv / .txt file here</span>
+    </div>
+    <div class="row">
+      <span class="small"><b>Load example data:</b></span>
+      <button type="button" id="btn-example">Jump</button>
+      <button type="button" id="btn-example-bal">Balance</button>
+    </div>
+    <p class="small muted">The first column will be read as time and the next 3 as x, y, z. The units will be assumed as m/s² and autoscaled in the graphs below.</p>
+    <div class="row" id="status-row">
+      <span class="pill" id="pill-example" hidden>Example data</span>
+      <p id="status" class="small" aria-live="polite"></p>
+    </div>
+    <div class="notes" id="notes" aria-live="polite"></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-graph">
+    <h2 id="h-graph">2. Select a Window</h2>
+    <div class="row">
+      <div class="chips" role="group" aria-label="Lines to show">
+        <label class="chip" style="--c: var(--sx)"><input type="checkbox" id="show-x" checked><span class="sw"></span>X</label>
+        <label class="chip" style="--c: var(--sy)"><input type="checkbox" id="show-y" checked><span class="sw"></span>Y</label>
+        <label class="chip" style="--c: var(--sz)"><input type="checkbox" id="show-z" checked><span class="sw"></span>Z</label>
+        <label class="chip" style="--c: var(--sr)"><input type="checkbox" id="show-r" checked><span class="sw"></span>Resultant</label>
+      </div>
+    </div>
+    <p class="small muted" style="max-width:70ch"><b>Select a window:</b> drag across the graph; drag its edges to adjust. Move your cursor over the graph (or touch it) to read the time and the X, Y and Z values at that point.</p>
+    <div class="chart-wrap" id="chart-wrap">
+      <canvas id="chart" tabindex="0" role="img" aria-label="Acceleration against time for X, Y, Z and the resultant. Drag to select a time window."></canvas>
+    </div>
+    <div class="readout" id="readout">The time and values at your cursor appear here.</div>
+    <div class="row">
+      <label class="field">Window start (s)
+        <input type="number" id="s0" step="0.01" min="0">
+      </label>
+      <label class="field">Window end (s)
+        <input type="number" id="s1" step="0.01" min="0">
+      </label>
+      <button type="button" id="btn-zoom">Zoom to window</button>
+      <button type="button" id="btn-all">Show whole trial</button>
+    </div>
+    <div class="row">
+      <label class="field">Filter
+        <select id="smooth">
+          <option value="none">No filter</option>
+          <option value="ma">Moving average (0.1 s)</option>
+          <option value="lp">Low-pass (4th order Butterworth)</option>
+          <option value="hp">High-pass (4th order Butterworth)</option>
+        </select>
+      </label>
+      <label class="field" id="f-fc" hidden>Cutoff frequency (Hz)
+        <input type="number" id="fc" value="5" min="0.1" step="0.1" style="width:100px">
+      </label>
+    </div>
+    <p class="small muted" style="max-width:70ch">A <b>low-pass</b> filter keeps movement below the cutoff frequency and removes everything above it, such as sensor noise or vibrations. A <b>high-pass</b> filter removes anything below the cutoff, such as a slow drift, and keeps everything above it.</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-res">
+    <h2 id="h-res">3. Results for the selected window</h2>
+    <p class="small muted" id="window-info"></p>
+    <div class="scroll">
+      <table id="results" aria-live="polite">
+        <thead>
+          <tr><th>Axis</th><th>Min (m/s²)</th><th>Max (m/s²)</th><th>Mean (m/s²)</th><th>RMS (m/s²)</th><th>Std dev (m/s²)</th></tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </div>
+    <details>
+      <summary>How these numbers are calculated</summary>
+      <div class="formulas">
+        <div><b>Min and Max</b><span class="mono">smallest and largest sample in the window</span></div>
+        <div><b>Mean</b><span class="mono">sum of samples ÷ number of samples in the window</span></div>
+        <div><b>RMS</b><span class="mono">√(sum of squared samples ÷ number of samples)</span></div>
+        <div><b>Standard deviation</b><span class="mono">√(sum of (sample − mean)² ÷ (number of samples − 1)): how far the samples spread around the mean, with any steady offset such as gravity left out</span></div>
+      </div>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="h-pk">
+    <details class="acc">
+    <summary id="h-pk">4. Finding multiple peaks</summary>
+    <div class="acc-body">
+    <p class="small muted">For data with multiple peaks, like walking, this will find the peaks (max or min).</p>
+    <div class="grid-fields">
+      <label class="field">Line
+        <select id="pk-sig"><option value="x">X</option><option value="y">Y</option><option value="z">Z</option><option value="r" selected>Resultant</option></select>
+      </label>
+      <label class="field">Find
+        <select id="pk-mode"><option value="max">Peaks (highest points)</option><option value="min">Valleys (lowest points)</option></select>
+      </label>
+      <label class="field">Only count points beyond (m/s²)
+        <input type="number" id="pk-thr" step="0.1">
+      </label>
+      <label class="field">Minimum time between (s)
+        <input type="number" id="pk-gap" step="0.05" min="0" value="0.30">
+      </label>
+    </div>
+    <div class="row">
+      <button type="button" id="btn-pk-suggest">Suggest a threshold</button>
+      <label class="row small muted" style="gap:6px"><input type="checkbox" id="pk-show">Mark on the graph</label>
+    </div>
+    <p class="small" id="pk-summary"></p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>#</th><th>Time (s)</th><th>Value (m/s²)</th><th>Time since previous (s)</th><th>Per minute</th></tr></thead>
+        <tbody id="pk-body"></tbody>
+      </table>
+    </div>
+    </div>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="h-calc">
+    <details class="acc">
+    <summary id="h-calc">5. AUC, Rate of Change</summary>
+    <div class="acc-body">
+    <p class="small muted">Select one of your data series, remove the offset, and then calculate the area under the curve (AUC) or rate of change.</p>
+    <div class="grid-fields">
+      <label class="field">Line
+        <select id="calc-sig"><option value="x">X</option><option value="y">Y</option><option value="z" selected>Z</option><option value="r">Resultant</option></select>
+      </label>
+      <label class="field">Offset to remove (m/s²)
+        <input type="number" id="calc-off" step="0.01">
+      </label>
+    </div>
+    <div class="row">
+      <button type="button" id="btn-calc-auto">Average of the first second</button>
+      <button type="button" id="btn-calc-g">9.81 (gravity)</button>
+      <button type="button" id="btn-calc-0">None (0)</button>
+    </div>
+    <div class="row">
+      <span class="small muted">Calculate</span>
+      <div class="seg" role="radiogroup" aria-label="Calculation">
+        <label><input type="radio" name="calc" value="auc" checked>Area under the curve</label>
+        <label><input type="radio" name="calc" value="rate">Rate of change</label>
+      </div>
+    </div>
+    <div class="mini" id="calc-wrap"><canvas id="chart-c" role="img" aria-label="Result of the calculation against time for the selected window"></canvas></div>
+    <div class="fftbox" id="calc-box" aria-live="polite"></div>
+    </div>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="h-fft">
+    <details class="acc">
+    <summary id="h-fft">6. Frequency (FFT)</summary>
+    <div class="acc-body">
+    <p class="small muted">Shows the frequency content of the data using a fast fourier transform (FFT).</p>
+    <div class="grid-fields">
+      <label class="field">Line
+        <select id="fft-sig"><option value="x">X</option><option value="y">Y</option><option value="z" selected>Z</option><option value="r">Resultant</option></select>
+      </label>
+      <label class="field">Show up to (Hz, 0 = automatic)
+        <input type="number" id="fft-max" step="1" min="0" value="0">
+      </label>
+    </div>
+    <p class="small" id="fft-summary"></p>
+    <div class="mini" id="fft-wrap"><canvas id="chart-f" role="img" aria-label="Frequency spectrum of the selected window"></canvas></div>
+    <div class="fftbox" id="fft-box" aria-live="polite">
+      <div><span class="fl">Peak frequency</span><span class="fv" id="fft-peak">–</span></div>
+      <div><span class="fl">Median frequency</span><span class="fv" id="fft-med">–</span></div>
+    </div>
+    <p class="hint" id="fft-hint">The offset (average) is removed before the FFT. Longer windows give better detail.</p>
+    </div>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="h-bal">
+    <details class="acc">
+    <summary id="h-bal">7. Postural sway</summary>
+    <div class="acc-body">
+    <p class="small muted">Use this to estimate balance outcomes using an accelerometer. Use the two horizontal axes. Note: balance trials are usually 20 to 30 seconds long.</p>
+    <div class="grid-fields">
+      <label class="field">Side to side
+        <select id="bal-ml"><option value="x" selected>X</option><option value="y">Y</option><option value="z">Z</option><option value="r">Resultant</option></select>
+      </label>
+      <label class="field">Front to back
+        <select id="bal-ap"><option value="x">X</option><option value="y" selected>Y</option><option value="z">Z</option><option value="r">Resultant</option></select>
+      </label>
+    </div>
+    <div class="row">
+      <label class="row small muted" style="gap:6px"><input type="checkbox" id="bal-ell" checked>Show the 95% CI for the motion path</label>
+      <button type="button" id="btn-bal-png">Save stabilogram (PNG)</button>
+    </div>
+    <div class="fftbox" aria-live="polite">
+      <div><span class="fl">Path length (m/s²)</span><span class="fv" id="bal-path">–</span></div>
+      <div><span class="fl">Mean path velocity (m/s³)</span><span class="fv" id="bal-vel">–</span></div>
+      <div><span class="fl">95% ellipse area ((m/s²)²)</span><span class="fv" id="bal-area">–</span></div>
+    </div>
+    <div class="stab" id="stab-wrap"><canvas id="chart-b" role="img" aria-label="Stabilogram: side-to-side acceleration against front-to-back acceleration, with the 95% confidence ellipse"></canvas></div>
+    </div>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="h-ov">
+    <details class="acc">
+    <summary id="h-ov">8. Overlay repetitions</summary>
+    <div class="acc-body">
+    <p class="small muted">Use this section to compare multiple trials of the same task (visually). Load each trial above and then select the data series to add to the window below. You can select the offset to remove and add a label for each repetition. Sample data of 5 vertical jumps is also provided. The maximum number of trials to compare is 12.</p>
+    <p class="small muted">Lastly, you can select whether to compare the trials using absolute seconds (which will show differences in how long each trial took) or as time normalized (which will show the trials using 0 to 100% of the movement time). You can line up the trials using the start of the trial or highest point. (hint: it may be helpful to use the window above to select a consistent starting point for each trial)</p>
+    <div class="grid-fields">
+      <label class="field">Line
+        <select id="ov-sig"><option value="x">X</option><option value="y">Y</option><option value="z">Z</option><option value="r" selected>Resultant</option></select>
+      </label>
+      <label class="field">Offset to remove
+        <select id="ov-off"><option value="none">None</option><option value="g">9.81 (gravity)</option><option value="mean">Average of the window</option></select>
+      </label>
+      <label class="field">Label for this repetition
+        <input type="text" id="ov-label" placeholder="Rep 1, Trial A…" maxlength="30" autocomplete="off">
+      </label>
+    </div>
+    <div class="row">
+      <button type="button" class="primary" id="btn-ov-add">Add current window</button>
+      <button type="button" id="btn-ov-undo">Remove last</button>
+      <button type="button" id="btn-ov-clear">Clear all</button>
+      <button type="button" id="btn-ov-example">Load example: 5 jumps</button>
+    </div>
+    <p class="hint" style="max-width:none">The example is simulated data: five vertical jumps that differ a little in height, timing and noise. It loads the trial into section 2 and adds each jump here.</p>
+    <div id="ov-list" class="ovlist"></div>
+    <div class="row">
+      <span class="small muted">Time axis</span>
+      <div class="seg" role="radiogroup" aria-label="Time axis">
+        <label><input type="radio" name="ovx" value="s" checked>Seconds</label>
+        <label><input type="radio" name="ovx" value="pct">Time normalized</label>
+      </div>
+      <label class="field" id="ov-align-f">Line up by
+        <select id="ov-align"><option value="start">Start of the window</option><option value="peak">Highest point</option></select>
+      </label>
+      <label class="row small muted" style="gap:6px"><input type="checkbox" id="ov-avg">Show average and spread (±1 SD)</label>
+      <label class="field">Graph title (optional)
+        <input type="text" id="ov-title" maxlength="60" autocomplete="off" placeholder="Countermovement jumps, 5 reps">
+      </label>
+    </div>
+    <div class="chart-wrap" id="ov-wrap" style="height:360px"><canvas id="chart-o" role="img" aria-label="Overlay of the added repetitions"></canvas></div>
+    <div class="row">
+      <button type="button" id="btn-ov-png">Save graph (PNG)</button>
+      <button type="button" id="btn-ov-csv">Save overlay data (CSV)</button>
+    </div>
+    <p class="hint">“Time normalized” stretches every repetition to the same length, so repetitions of different durations can be compared by shape. Seconds keeps the real timing. The average is worked out only where every repetition has data.</p>
+    </div>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="h-exp">
+    <details class="acc">
+    <summary id="h-exp">9. Export</summary>
+    <div class="acc-body">
+    <p class="small muted">Save the numbers for the selected window, or copy them to paste into Excel.</p>
+    <div class="row">
+      <button type="button" class="primary" id="btn-dl-res">Download results (.csv)</button>
+      <button type="button" id="btn-dl-data">Download window data (.csv)</button>
+      <button type="button" id="btn-dl-png">Download main graph (.png)</button>
+    </div>
+    <div class="row">
+      <button type="button" id="btn-copy-res">Copy results table</button>
+      <button type="button" id="btn-copy-data">Copy window data</button>
+      <label class="row small muted" style="gap:6px"><input type="checkbox" id="zero-t" checked>Start window time at 0</label>
+    </div>
+    <div id="toast" aria-live="polite"></div>
+    <div id="copybox">
+      <p class="small muted">Your browser blocked automatic copying. The text is selected below. Press Ctrl+C (Cmd+C on a Mac), then paste it into Excel.</p>
+      <textarea id="copytext" readonly></textarea>
+    </div>
+    </div>
+    </details>
+  </section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var G = 9.81;
+  var KEYS = ['x', 'y', 'z', 'r'];
+  var NAMES = { x: 'X', y: 'Y', z: 'Z', r: 'Resultant' };
+  function $(id) { return document.getElementById(id); }
+
+  var header = [], rows = [], fileName = '', isExample = false;
+  var cfg = { t: -1, x: 0, y: 1, z: 2, unit: 'ms2', tunit: 'auto', rate: 100 };
+  var D = null, view = [0, 1], sel = [0, 1];
+  var show = { x: true, y: true, z: true, r: true };
+  var hoverT = null, drag = null, geo = null, hz = 0, toastTimer = null;
+  var RAW = null, filt = { mode: 'none', sec: 0, fc: 5 };
+  var lastPeaks = [], lastPkRate = '', lastCalc = null, lastFft = null, pkAuto = true, calcAuto = true, lastBal = null, REPS = [];
+
+  /* ---------- parsing ---------- */
+  function parseText(text) {
+    var lines = text.replace(/\r/g, '').split('\n').filter(function (l) { return l.trim().length; });
+    if (!lines.length) throw new Error('The file is empty.');
+    var sample = lines.slice(0, 20).join('\n');
+    var counts = { '\t': 0, ',': 0, ';': 0 };
+    Object.keys(counts).forEach(function (d) { counts[d] = sample.split(d).length - 1; });
+    var delim = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; })[0];
+    var split = counts[delim] === 0
+      ? function (l) { return l.trim().split(/\s+/); }
+      : function (l) { return l.split(delim).map(function (s) { return s.trim(); }); };
+    var toks = lines.map(split);
+    function isData(t) { return t.filter(function (v) { return v !== '' && !isNaN(Number(v)); }).length >= 3; }
+    var first = -1;
+    for (var i = 0; i < toks.length; i++) { if (isData(toks[i])) { first = i; break; } }
+    if (first < 0) throw new Error('No rows of numbers were found. Check that this is the exported data file.');
+    var ncol = toks[first].length;
+    var hdr = null;
+    for (var j = first - 1; j >= 0; j--) { if (toks[j].length >= 3) { hdr = toks[j]; break; } }
+    if (!hdr || hdr.length !== ncol) {
+      hdr = [];
+      for (var c = 0; c < ncol; c++) hdr.push('Column ' + (c + 1));
+    }
+    var data = toks.slice(first).filter(function (t) { return t.length === ncol; });
+    return { header: hdr, rows: data };
+  }
+
+  function numericCols() {
+    var n = Math.min(rows.length, 60), out = [];
+    for (var c = 0; c < header.length; c++) {
+      var ok = 0;
+      for (var i = 0; i < n; i++) { var v = rows[i][c]; if (v !== '' && !isNaN(Number(v))) ok++; }
+      out.push(n > 0 && ok / n > 0.9);
+    }
+    return out;
+  }
+
+  function detect() {
+    if (header.length < 4) throw new Error('The file needs at least 4 columns: time, x, y and z.');
+    cfg.t = 0; cfg.x = 1; cfg.y = 2; cfg.z = 3; cfg.tunit = 'auto';
+    cfg.unit = /\(\s*g\s*\)|\[\s*g\s*\]/i.test(header[1]) ? 'g' : 'ms2';
+  }
+
+  function parseClock(s) {
+    var m = s.match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2}):(\d{2})(?:[.,](\d+))?/);
+    if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) / 1000 + (m[7] ? +('0.' + m[7]) : 0);
+    m = s.match(/(\d{1,2}):(\d{2}):(\d{2})(?:[.,](\d+))?/);
+    if (m) return (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + (m[4] ? +('0.' + m[4]) : 0);
+    return NaN;
+  }
+
+  function parseTimes() {
+    var col = rows.map(function (r) { return r[cfg.t]; });
+    var numeric = col.slice(0, 50).every(function (v) { return v !== '' && !isNaN(Number(v)); });
+    if (!numeric) return { vals: col.map(parseClock), numeric: false };
+    var vals = col.map(Number), fac;
+    if (cfg.tunit === 's') fac = 1;
+    else if (cfg.tunit === 'ms') fac = 0.001;
+    else {
+      var d = [];
+      for (var i = 1; i < Math.min(vals.length, 400); i++) { var dd = vals[i] - vals[i - 1]; if (dd > 0) d.push(dd); }
+      d.sort(function (a, b) { return a - b; });
+      var med = d.length ? d[d.length >> 1] : 0.01;
+      fac = med >= 1 ? 0.001 : 1;
+    }
+    return { vals: vals.map(function (v) { return v * fac; }), numeric: true };
+  }
+
+  function core(notes) {
+    var k = cfg.unit === 'g' ? G : 1;
+    var tv = null;
+    if (cfg.t >= 0) tv = parseTimes();
+    var t = [], x = [], y = [], z = [];
+    for (var i = 0; i < rows.length; i++) {
+      var xv = parseFloat(rows[i][cfg.x]), yv = parseFloat(rows[i][cfg.y]), zv = parseFloat(rows[i][cfg.z]);
+      if (!isFinite(xv) || !isFinite(yv) || !isFinite(zv)) continue;
+      var tt = tv ? tv.vals[i] : 0;
+      if (tv && !isFinite(tt)) continue;
+      x.push(xv * k); y.push(yv * k); z.push(zv * k); t.push(tt);
+    }
+    var n = x.length;
+    if (n < 2) throw new Error('Fewer than two usable rows with the chosen columns. Check the column settings.');
+    if (!tv) {
+      for (var a = 0; a < n; a++) t[a] = a / cfg.rate;
+    } else {
+      var diffs = [];
+      for (var b = 1; b < n; b++) { var df = t[b] - t[b - 1]; if (df > 0) diffs.push(df); }
+      diffs.sort(function (p, q) { return p - q; });
+      var medDt = diffs.length ? diffs[diffs.length >> 1] : 0.01;
+      var dups = 0;
+      for (var s = 0; s < n;) {
+        var e = s;
+        while (e + 1 < n && t[e + 1] === t[s]) e++;
+        var g = e - s + 1;
+        if (g > 1) {
+          var base = t[s];
+          var nxt = e + 1 < n ? t[e + 1] : base + g * medDt;
+          for (var m = 0; m < g; m++) t[s + m] = base + m * (nxt - base) / g;
+          dups += g;
+        }
+        s = e + 1;
+      }
+      if (dups > 0) notes.push(dups + ' samples shared a timestamp with their neighbours, so they were spaced evenly between timestamps.');
+      var back = 0;
+      for (var c = 1; c < n; c++) { if (t[c] < t[c - 1]) back++; }
+      if (back > 0) notes.push('Time goes backwards in ' + back + ' places. Check that the first column is time.');
+    }
+    var t0 = t[0];
+    for (var q = 0; q < n; q++) t[q] -= t0;
+    var tmax = t[n - 1];
+    if (!(tmax > 0)) {
+      notes.push('The first column does not increase, so it cannot be read as time. The samples were spaced at 100 per second instead.');
+      t = t.map(function (_, i) { return i / cfg.rate; });
+    }
+    return { t: t, x: x, y: y, z: z, n: n };
+  }
+  function movAvg(a, m) {
+    var n = a.length, out = new Array(n), h = (m - 1) >> 1, c = new Float64Array(n + 1), i;
+    for (i = 0; i < n; i++) c[i + 1] = c[i] + a[i];
+    for (i = 0; i < n; i++) { var lo = Math.max(0, i - h), hi = Math.min(n - 1, i + h); out[i] = (c[hi + 1] - c[lo]) / (hi - lo + 1); }
+    return out;
+  }
+  /* 2nd-order Butterworth, run forwards then backwards (no time shift). Ends are padded by reflection. */
+  function butter(a, fs, fc, high) {
+    var n = a.length, w = Math.tan(Math.PI * fc / fs), k = Math.SQRT2, nm = 1 / (1 + k * w + w * w);
+    var b0 = high ? nm : w * w * nm, b1 = high ? -2 * nm : 2 * w * w * nm, b2 = b0;
+    var a1 = 2 * (w * w - 1) * nm, a2 = (1 - k * w + w * w) * nm;
+    var P = Math.min(n - 1, Math.max(6, Math.round(3 * fs / fc))), L = n + 2 * P, e = new Float64Array(L), i;
+    for (i = 0; i < P; i++) { e[i] = 2 * a[0] - a[P - i]; e[L - 1 - i] = 2 * a[n - 1] - a[n - 1 - P + i]; }
+    for (i = 0; i < n; i++) e[P + i] = a[i];
+    function pass(v) {
+      var x1 = v[0], x2 = v[0], y1 = high ? 0 : v[0], y2 = y1, o = new Float64Array(L);
+      for (var j = 0; j < L; j++) { var y = b0 * v[j] + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2; x2 = x1; x1 = v[j]; y2 = y1; y1 = y; o[j] = y; }
+      return o;
+    }
+    var f = pass(e); f.reverse(); var g = pass(f); g.reverse();
+    var out = new Array(n); for (i = 0; i < n; i++) out[i] = g[P + i];
+    return out;
+  }
+  function filterLabel() {
+    return filt.mode === 'ma' ? filt.sec + ' s moving average' : filt.mode === 'lp' ? 'low-pass 4th order Butterworth, ' + filt.fc + ' Hz cutoff' : filt.mode === 'hp' ? 'high-pass 4th order Butterworth, ' + filt.fc + ' Hz cutoff' : 'none';
+  }
+  /* Build the arrays the app works from: optionally filtered copies of X, Y, Z plus the resultant. */
+  function derive(src, f) {
+    var span = src.t[src.n - 1], rate = span > 0 ? (src.n - 1) / span : 100;
+    var fn = function (a) { return a; };
+    if (f.mode === 'ma') { var m = Math.max(1, Math.round(f.sec * rate)); if (m % 2 === 0) m++; if (m > 1) fn = function (a) { return movAvg(a, m); }; }
+    else if ((f.mode === 'lp' || f.mode === 'hp') && f.fc > 0 && src.n > 10) {
+      var fc = Math.min(f.fc, 0.45 * rate);
+      fn = function (a) { return butter(a, rate, fc, f.mode === 'hp'); };
+    }
+    var x = fn(src.x), y = fn(src.y), z = fn(src.z);
+    var r = new Array(src.n);
+    for (var i = 0; i < src.n; i++) r[i] = Math.sqrt(x[i] * x[i] + y[i] * y[i] + z[i] * z[i]);
+    return { t: src.t, x: x, y: y, z: z, r: r, n: src.n };
+  }
+  function build() {
+    var notes = [];
+    RAW = core(notes);
+    D = derive(RAW, filt);
+    var tmax = D.t[D.n - 1];
+    hz = (D.n - 1) / tmax;
+    view = [0, tmax]; sel = [0, tmax];
+    pkAuto = true; calcAuto = true;
+    if (hz < 40) notes.push('This file has about ' + Math.round(hz) + ' samples per second. Fast movements such as jumps and throws need at least 50 to 100 per second, or short peaks can be missed.');
+    renderNotes(notes);
+    renderStatus();
+    renderAll();
+  }
+
+  /* ---------- helpers ---------- */
+  function lowerBound(arr, v) { var lo = 0, hi = arr.length; while (lo < hi) { var m = (lo + hi) >> 1; if (arr[m] < v) lo = m + 1; else hi = m; } return lo; }
+  function upperBound(arr, v) { var lo = 0, hi = arr.length; while (lo < hi) { var m = (lo + hi) >> 1; if (arr[m] <= v) lo = m + 1; else hi = m; } return lo - 1; }
+  function fmt(v, d) { if (!isFinite(v)) return '–'; return (Math.abs(v) < 0.0005 ? 0 : v).toFixed(d === undefined ? 3 : d); }
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function niceTicks(a, b, n) {
+    var span = (b - a) || 1, raw = span / n, p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p;
+    var step = (m < 1.5 ? 1 : m < 3 ? 2 : m < 7 ? 5 : 10) * p, out = [];
+    for (var v = Math.ceil(a / step - 1e-9) * step; v <= b + step * 1e-6; v += step) out.push(+v.toFixed(10));
+    return { ticks: out, step: step };
+  }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+  /* ---------- statistics ---------- */
+  function stats() {
+    if (!D) return null;
+    var lo = lowerBound(D.t, sel[0] - 1e-9), hi = upperBound(D.t, sel[1] + 1e-9);
+    var n = hi - lo + 1;
+    if (n < 2) return null;
+    var out = {};
+    KEYS.forEach(function (key) {
+      var a = D[key], mn = Infinity, mx = -Infinity, s = 0, ss = 0, imx = lo, sd = 0;
+      for (var i = lo; i <= hi; i++) {
+        var v = a[i];
+        if (v < mn) mn = v;
+        if (v > mx) { mx = v; imx = i; }
+        s += v; ss += v * v;
+      }
+      var mean = s / n; for (i = lo; i <= hi; i++) sd += (a[i] - mean) * (a[i] - mean);
+      out[key] = { min: mn, max: mx, range: mx - mn, mean: mean, sd: Math.sqrt(sd / (n - 1)), rms: Math.sqrt(ss / n), tmax: D.t[imx] };
+    });
+    return { out: out, n: n, lo: lo, hi: hi, t0: D.t[lo], t1: D.t[hi] };
+  }
+
+  /* ---------- rendering: text and tables ---------- */
+  function renderStatus() {
+    var el = $('status');
+    $('pill-example').hidden = !isExample;
+    el.textContent = fileName + ' · ' + D.n + ' samples · about ' + Math.round(hz) + ' Hz · ' + D.t[D.n - 1].toFixed(2) + ' s';
+  }
+  function renderNotes(list) {
+    var box = $('notes');
+    box.innerHTML = '';
+    list.forEach(function (txt) {
+      var d = document.createElement('div');
+      d.className = 'note';
+      d.textContent = txt;
+      box.appendChild(d);
+    });
+  }
+  function setError(msg) {
+    var box = $('notes');
+    box.innerHTML = '';
+    var d = document.createElement('div');
+    d.className = 'err';
+    d.textContent = msg;
+    box.appendChild(d);
+  }
+
+  function renderStats() {
+    var S = stats();
+    var body = $('results-body');
+    body.innerHTML = '';
+    if (!S) {
+      $('window-info').textContent = 'Select a window that contains at least two samples.';
+      return null;
+    }
+    KEYS.forEach(function (key) {
+      var o = S.out[key], tr = document.createElement('tr');
+      var colorVar = '--s' + key;
+      tr.innerHTML = '<td><span class="sw" style="--c: var(' + colorVar + ')"></span>' + NAMES[key] + '</td>' +
+        '<td>' + fmt(o.min) + '</td><td>' + fmt(o.max) + '</td><td>' + fmt(o.mean) + '</td><td>' + fmt(o.rms) + '</td><td>' + fmt(o.sd) + '</td>';
+      body.appendChild(tr);
+    });
+    var dur = S.t1 - S.t0;
+    $('window-info').textContent = 'Window ' + S.t0.toFixed(2) + ' to ' + S.t1.toFixed(2) + ' s (' + dur.toFixed(2) + ' s, ' + S.n +
+      ' samples). Largest resultant: ' + fmt(S.out.r.max, 2) + ' m/s² at ' + S.out.r.tmax.toFixed(2) + ' s.' + (filt.mode !== 'none' ? ' Filter: ' + filterLabel() + '.' : '');
+    return S;
+  }
+
+  function renderInputs() {
+    $('s0').value = sel[0].toFixed(2);
+    $('s1').value = sel[1].toFixed(2);
+    var tmax = D ? D.t[D.n - 1] : 0;
+    $('s0').max = tmax; $('s1').max = tmax;
+  }
+
+  function renderAll() { renderInputs(); renderStats(); renderAnalysis(); draw(); }
+
+  /* ---------- chart ---------- */
+  function draw() {
+    var cv = $('chart'), wrap = cv.parentElement;
+    var dpr = window.devicePixelRatio || 1;
+    var W = wrap.clientWidth, H = wrap.clientHeight;
+    if (!W || !H) return;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    var ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    var ink = css('--ink'), muted = css('--muted'), grid = css('--grid'), accent = css('--accent'), soft = css('--accent-soft');
+    var colors = { x: css('--sx'), y: css('--sy'), z: css('--sz'), r: css('--sr') };
+    ctx.font = '12px "IBM Plex Mono", ui-monospace, monospace';
+    if (!D) { ctx.fillStyle = muted; ctx.fillText('Load a file to see the graph.', 16, 28); return; }
+    var L = 54, R = 12, T = 10, B = 28, pw = W - L - R, ph = H - T - B;
+    var lo = Math.max(0, lowerBound(D.t, view[0]) - 1), hi = Math.min(D.n - 1, upperBound(D.t, view[1]) + 1);
+    var active = KEYS.filter(function (k) { return show[k]; });
+    if (!active.length) active = KEYS;
+    var ymin = Infinity, ymax = -Infinity;
+    active.forEach(function (k) {
+      var a = D[k];
+      for (var i = lo; i <= hi; i++) { if (a[i] < ymin) ymin = a[i]; if (a[i] > ymax) ymax = a[i]; }
+    });
+    if (!(ymax > ymin)) { ymin -= 1; ymax += 1; }
+    var pad = (ymax - ymin) * 0.06; ymin -= pad; ymax += pad;
+    var v0 = view[0], v1 = view[1];
+    function tx(t) { return L + (t - v0) / (v1 - v0) * pw; }
+    function ty(v) { return T + (ymax - v) / (ymax - ymin) * ph; }
+    geo = { L: L, R: R, T: T, B: B, pw: pw, ph: ph, v0: v0, v1: v1 };
+
+    ctx.lineWidth = 1; ctx.textBaseline = 'middle';
+    var yt = niceTicks(ymin, ymax, Math.max(3, Math.floor(ph / 48)));
+    ctx.textAlign = 'right';
+    yt.ticks.forEach(function (v) {
+      var y = Math.round(ty(v)) + 0.5;
+      ctx.strokeStyle = Math.abs(v) < 1e-9 ? muted : grid;
+      ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke();
+      ctx.fillStyle = muted; ctx.fillText(+v.toFixed(2) + '', L - 6, y);
+    });
+    var xt = niceTicks(v0, v1, Math.max(3, Math.floor(pw / 90)));
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    xt.ticks.forEach(function (v) {
+      var x = Math.round(tx(v)) + 0.5;
+      ctx.strokeStyle = grid;
+      ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, T + ph); ctx.stroke();
+      ctx.fillStyle = muted; ctx.fillText(+v.toFixed(3) + '', x, T + ph + 6);
+    });
+    ctx.save();
+    ctx.translate(12, T + ph / 2); ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = muted;
+    ctx.fillText('m/s²', 0, 0);
+    ctx.restore();
+    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+    ctx.fillText('time (s)', L + pw, H - 1);
+
+    /* selection band under the lines */
+    var sx0 = clamp(tx(sel[0]), L, L + pw), sx1 = clamp(tx(sel[1]), L, L + pw);
+    if (sx1 > sx0) { ctx.fillStyle = soft; ctx.fillRect(sx0, T, sx1 - sx0, ph); }
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip();
+    ctx.lineJoin = 'round';
+    KEYS.forEach(function (k) {
+      if (!show[k]) return;
+      var a = D[k];
+      ctx.strokeStyle = colors[k];
+      ctx.lineWidth = k === 'r' ? 2.2 : 1.4;
+      ctx.beginPath();
+      if (hi - lo <= pw * 2) {
+        for (var i = lo; i <= hi; i++) {
+          var X = tx(D.t[i]), Y = ty(a[i]);
+          if (i === lo) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+        }
+      } else {
+        var mn = new Float64Array(Math.ceil(pw) + 2).fill(Infinity), mx = new Float64Array(Math.ceil(pw) + 2).fill(-Infinity);
+        for (var j = lo; j <= hi; j++) {
+          var p = Math.floor(tx(D.t[j]) - L);
+          if (p < 0 || p >= mn.length) continue;
+          if (a[j] < mn[p]) mn[p] = a[j];
+          if (a[j] > mx[p]) mx[p] = a[j];
+        }
+        for (var c = 0; c < mn.length; c++) {
+          if (mn[c] === Infinity) continue;
+          ctx.moveTo(L + c + 0.5, ty(mn[c])); ctx.lineTo(L + c + 0.5, ty(mx[c]) - 0.01);
+        }
+      }
+      ctx.stroke();
+    });
+    if ($('pk-show').checked && lastPeaks.length) {
+      ctx.fillStyle = colors[$('pk-sig').value]; ctx.strokeStyle = css('--surface'); ctx.lineWidth = 1.5;
+      lastPeaks.forEach(function (p) {
+        var px = tx(p.t), py = ty(p.v);
+        if (px < L || px > L + pw) return;
+        ctx.beginPath(); ctx.arc(px, py, 4.5, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+      });
+    }
+    ctx.restore();
+
+    /* selection edges */
+    ctx.strokeStyle = accent; ctx.lineWidth = 2;
+    [sel[0], sel[1]].forEach(function (t) {
+      var x = tx(t);
+      if (x < L - 1 || x > L + pw + 1) return;
+      ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, T + ph); ctx.stroke();
+      ctx.fillStyle = accent; ctx.fillRect(x - 3, T + ph / 2 - 11, 6, 22);
+    });
+    /* hover line */
+    if (hoverT !== null && !drag) {
+      var hx = tx(hoverT);
+      ctx.strokeStyle = muted; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(hx, T); ctx.lineTo(hx, T + ph); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.strokeStyle = muted; ctx.lineWidth = 1;
+    ctx.strokeRect(L + 0.5, T + 0.5, pw, ph);
+  }
+
+  function evT(e) {
+    var rect = $('chart').getBoundingClientRect();
+    var x = e.clientX - rect.left;
+    return { x: x, t: clamp(geo.v0 + (x - geo.L) / geo.pw * (geo.v1 - geo.v0), geo.v0, geo.v1) };
+  }
+  function nearEdge(x) {
+    if (!geo) return null;
+    var span = geo.v1 - geo.v0;
+    var x0 = geo.L + (sel[0] - geo.v0) / span * geo.pw, x1 = geo.L + (sel[1] - geo.v0) / span * geo.pw;
+    var d0 = Math.abs(x - x0), d1 = Math.abs(x - x1);
+    if (Math.min(d0, d1) > 9) return null;
+    return d0 <= d1 ? 'e0' : 'e1';
+  }
+  function updateReadout() {
+    var el = $('readout');
+    if (hoverT === null || !D) { el.textContent = 'The time and values at your cursor appear here.'; return; }
+    var i = clamp(lowerBound(D.t, hoverT), 0, D.n - 1);
+    if (i > 0 && Math.abs(D.t[i - 1] - hoverT) < Math.abs(D.t[i] - hoverT)) i--;
+    el.textContent = 't ' + D.t[i].toFixed(2) + ' s   X ' + fmt(D.x[i], 2) + '   Y ' + fmt(D.y[i], 2) + '   Z ' + fmt(D.z[i], 2) + '   R ' + fmt(D.r[i], 2) + '  (m/s²)';
+  }
+
+  var cv = $('chart');
+  cv.addEventListener('pointerdown', function (e) {
+    if (!D || !geo) return;
+    var p = evT(e);
+    cv.setPointerCapture(e.pointerId);
+    var edge = nearEdge(p.x);
+    drag = { mode: edge || 'new', anchor: p.t, prev: sel.slice() };
+    if (!edge) sel = [p.t, p.t];
+    renderInputs(); draw();
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (!D || !geo) return;
+    var p = evT(e);
+    if (drag) {
+      var eps = (geo.v1 - geo.v0) / geo.pw;
+      if (drag.mode === 'new') sel = [Math.min(drag.anchor, p.t), Math.max(drag.anchor, p.t)];
+      else if (drag.mode === 'e0') sel[0] = Math.min(p.t, sel[1] - eps);
+      else sel[1] = Math.max(p.t, sel[0] + eps);
+      renderInputs(); renderStats(); renderAnalysis(); draw();
+    } else {
+      hoverT = p.t;
+      cv.style.cursor = nearEdge(p.x) ? 'ew-resize' : 'crosshair';
+      updateReadout(); draw();
+    }
+  });
+  function endDrag() {
+    if (!drag) return;
+    var minW = 4 / geo.pw * (geo.v1 - geo.v0);
+    if (drag.mode === 'new' && sel[1] - sel[0] < minW) sel = drag.prev;
+    drag = null;
+    renderAll();
+  }
+  cv.addEventListener('pointerup', endDrag);
+  cv.addEventListener('pointercancel', endDrag);
+  cv.addEventListener('pointerleave', function () { if (!drag) { hoverT = null; updateReadout(); draw(); } });
+  cv.addEventListener('dblclick', function () { if (D) { sel = [view[0], view[1]]; renderAll(); } });
+
+  /* ---------- controls ---------- */
+  function setWindowFromInputs() {
+    if (!D) return;
+    var tmax = D.t[D.n - 1];
+    var a = parseFloat($('s0').value), b = parseFloat($('s1').value);
+    if (!isFinite(a) || !isFinite(b)) { renderInputs(); return; }
+    a = clamp(a, 0, tmax); b = clamp(b, 0, tmax);
+    if (a > b) { var tmp = a; a = b; b = tmp; }
+    sel = [a, b];
+    renderAll();
+  }
+  $('s0').addEventListener('change', setWindowFromInputs);
+  $('s1').addEventListener('change', setWindowFromInputs);
+  $('btn-zoom').addEventListener('click', function () {
+    if (!D || sel[1] - sel[0] <= 0) return;
+    view = sel.slice(); draw();
+  });
+  $('btn-all').addEventListener('click', function () {
+    if (!D) return;
+    view = [0, D.t[D.n - 1]]; draw();
+  });
+  KEYS.forEach(function (k) {
+    $('show-' + k).addEventListener('change', function (e) { show[k] = e.target.checked; draw(); });
+  });
+  /* ---------- loading ---------- */
+  function loadText(text, name, example) {
+    try {
+      var p = parseText(text.replace(/^﻿/, ''));
+      header = p.header; rows = p.rows; fileName = name; isExample = example;
+      detect(); build();
+    } catch (err) {
+      D = null; setError(err.message); $('status').textContent = ''; $('pill-example').hidden = true;
+      $('results-body').innerHTML = ''; $('window-info').textContent = '';
+      draw();
+    }
+  }
+  function readFile(file) {
+    var fr = new FileReader();
+    fr.onload = function () { loadText(String(fr.result), file.name, false); };
+    fr.onerror = function () { setError('That file could not be read.'); };
+    fr.readAsText(file);
+  }
+  $('file').addEventListener('change', function (e) { if (e.target.files && e.target.files[0]) readFile(e.target.files[0]); });
+  var drop = $('drop');
+  ['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', function (e) {
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) readFile(f);
+  });
+  $('btn-example').addEventListener('click', function () { loadText(exampleCSV(), 'Simulated vertical jump', true); });
+
+  /* Simulated vertical jump at 100 Hz, built as CSV text so it passes through the same parser as a real file. */
+  function exampleCSV() {
+    var out = ['Time(s),AccX(m/s²),AccY(m/s²),AccZ(m/s²)'], seed = 7;
+    function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647 - 0.5; }
+    for (var i = 0; i < 600; i++) {
+      var t = i / 100, net = 0, sway = 0;
+      if (t >= 1.5 && t < 1.8) net = -4.5 * Math.sin(Math.PI * (t - 1.5) / 0.3);
+      else if (t >= 1.8 && t < 2.1) net = 15 * Math.sin(Math.PI * (t - 1.8) / 0.3);
+      else if (t >= 2.1 && t < 2.51) net = -9.81;
+      else if (t >= 2.51 && t < 2.61) net = 32 * Math.sin(Math.PI * (t - 2.51) / 0.1);
+      else if (t >= 2.61 && t < 3.4) net = -6 * Math.exp(-(t - 2.61) * 7) * Math.sin(2 * Math.PI * 3 * (t - 2.61));
+      if (t >= 1.5 && t < 3.4) sway = 1.2 * Math.sin(2 * Math.PI * 1.4 * t);
+      var xv = 0.35 + sway * 0.6 + rnd() * 0.25;
+      var yv = -0.2 + sway * 0.4 + rnd() * 0.25;
+      var zv = 9.81 + net + rnd() * 0.25;
+      out.push([t.toFixed(2), xv.toFixed(3), yv.toFixed(3), zv.toFixed(3)].join(','));
+    }
+    return out.join('\n');
+  }
+
+  /* 30 s of simulated quiet standing: slow sway plus sensor noise. Fixed seed. Z is vertical, so side to side = X, front to back = Y. */
+  // Quiet-standing example: accelerations derived from a real force-plate trial (Duarte BMC, CC BY 4.0; Santos & Duarte 2016 lab),
+  // a = (g/h)(COM - COP) with h = 1 m, COM = 0.5 Hz low-passed COP, plus 0.004 m/s² sensor noise. 20 s at 100 Hz.
+  var BAL_XY = '0.1041,-0.0663;0.1042,-0.0712;0.1046,-0.0718;0.1077,-0.0627;0.1066,-0.0710;0.1116,-0.0677;0.1111,-0.0735;0.1116,-0.0678;0.1075,-0.0733;0.1065,-0.0775;0.1081,-0.0743;0.1119,-0.0734;0.1192,-0.0765;0.1102,-0.0791;0.1219,-0.0777;0.1178,-0.0813;0.1218,-0.0837;0.1317,-0.0847;0.1290,-0.0789;0.1283,-0.0836;0.1325,-0.0834;0.1284,-0.0837;0.1398,-0.0905;0.1386,-0.0841;0.1333,-0.0767;0.1394,-0.0896;0.1370,-0.0826;0.1361,-0.0821;0.1367,-0.0820;0.1426,-0.0869;0.1376,-0.0854;0.1371,-0.0875;0.1340,-0.0825;0.1397,-0.0761;0.1306,-0.0830;0.1382,-0.0870;0.1335,-0.0790;0.1401,-0.0756;0.1335,-0.0799;0.1335,-0.0727;0.1324,-0.0805;0.1351,-0.0804;0.1323,-0.0851;0.1326,-0.0832;0.1369,-0.0795;0.1318,-0.0801;0.1302,-0.0792;0.1312,-0.0816;0.1256,-0.0832;0.1235,-0.0933;0.1283,-0.0893;0.1294,-0.0773;0.1246,-0.0894;0.1279,-0.0855;0.1255,-0.0888;0.1282,-0.0865;0.1206,-0.0894;0.1243,-0.0939;0.1246,-0.0937;0.1270,-0.0900;0.1230,-0.0935;0.1218,-0.0994;0.1174,-0.0902;0.1132,-0.0884;0.1145,-0.0888;0.1180,-0.0887;0.1219,-0.0979;0.1264,-0.0861;0.1212,-0.0931;0.1210,-0.0962;0.1263,-0.0947;0.1220,-0.0961;0.1200,-0.0983;0.1279,-0.0940;0.1270,-0.0933;0.1206,-0.0942;0.1213,-0.0919;0.1221,-0.0919;0.1182,-0.0923;0.1304,-0.0901;0.1196,-0.0845;0.1297,-0.0904;0.1234,-0.0862;0.1174,-0.0802;0.1245,-0.0828;0.1218,-0.0815;0.1228,-0.0847;0.1209,-0.0900;0.1311,-0.0886;0.1274,-0.0884;0.1249,-0.0923;0.1296,-0.0936;0.1269,-0.0943;0.1326,-0.0935;0.1297,-0.1000;0.1227,-0.0951;0.1322,-0.1002;0.1304,-0.0969;0.1314,-0.0964;0.1261,-0.0937;0.1229,-0.0956;0.1300,-0.0947;0.1357,-0.0912;0.1239,-0.1027;0.1322,-0.0987;0.1296,-0.0901;0.1238,-0.1007;0.1322,-0.0909;0.1311,-0.0898;0.1296,-0.0949;0.1333,-0.0916;0.1282,-0.0846;0.1354,-0.0840;0.1324,-0.0874;0.1330,-0.0877;0.1383,-0.0868;0.1393,-0.0820;0.1462,-0.0886;0.1418,-0.0833;0.1382,-0.0887;0.1364,-0.0801;0.1379,-0.0830;0.1370,-0.0792;0.1380,-0.0932;0.1353,-0.0931;0.1250,-0.0881;0.1433,-0.0866;0.1332,-0.0911;0.1424,-0.0871;0.1380,-0.0881;0.1379,-0.0846;0.1399,-0.0868;0.1335,-0.0854;0.1347,-0.0827;0.1321,-0.0874;0.1367,-0.0919;0.1430,-0.0805;0.1335,-0.0831;0.1359,-0.0965;0.1344,-0.0861;0.1326,-0.0899;0.1300,-0.0861;0.1346,-0.0838;0.1285,-0.0788;0.1251,-0.0862;0.1187,-0.0781;0.1283,-0.0803;0.1256,-0.0829;0.1220,-0.0836;0.1184,-0.0814;0.1231,-0.0782;0.1145,-0.0815;0.1098,-0.0714;0.1119,-0.0763;0.1060,-0.0798;0.1045,-0.0709;0.1005,-0.0745;0.0986,-0.0727;0.0906,-0.0739;0.0912,-0.0694;0.0893,-0.0707;0.0965,-0.0743;0.0864,-0.0722;0.0875,-0.0767;0.0885,-0.0643;0.0851,-0.0727;0.0819,-0.0701;0.0813,-0.0753;0.0918,-0.0740;0.0917,-0.0640;0.0892,-0.0679;0.0968,-0.0709;0.0876,-0.0757;0.0911,-0.0645;0.0958,-0.0743;0.0894,-0.0725;0.0949,-0.0712;0.0953,-0.0690;0.0939,-0.0701;0.0965,-0.0701;0.0982,-0.0620;0.0990,-0.0691;0.0903,-0.0676;0.0896,-0.0746;0.1011,-0.0660;0.0974,-0.0755;0.0967,-0.0713;0.1009,-0.0594;0.0994,-0.0714;0.0940,-0.0684;0.0982,-0.0728;0.0996,-0.0728;0.1039,-0.0642;0.1041,-0.0706;0.1023,-0.0696;0.0991,-0.0708;0.0960,-0.0757;0.1050,-0.0711;0.1033,-0.0666;0.0961,-0.0741;0.1043,-0.0695;0.1026,-0.0671;0.1055,-0.0761;0.1014,-0.0681;0.1075,-0.0790;0.1116,-0.0692;0.1123,-0.0733;0.1064,-0.0765;0.1186,-0.0728;0.1158,-0.0748;0.1113,-0.0790;0.1104,-0.0685;0.1083,-0.0681;0.1162,-0.0766;0.1144,-0.0743;0.1179,-0.0745;0.1164,-0.0736;0.1173,-0.0775;0.1229,-0.0690;0.1187,-0.0727;0.1240,-0.0770;0.1318,-0.0755;0.1363,-0.0770;0.1337,-0.0751;0.1309,-0.0721;0.1351,-0.0722;0.1372,-0.0791;0.1385,-0.0747;0.1442,-0.0786;0.1415,-0.0820;0.1453,-0.0795;0.1363,-0.0753;0.1485,-0.0809;0.1401,-0.0773;0.1400,-0.0721;0.1412,-0.0757;0.1465,-0.0751;0.1456,-0.0753;0.1387,-0.0782;0.1507,-0.0716;0.1440,-0.0700;0.1436,-0.0693;0.1506,-0.0735;0.1366,-0.0734;0.1374,-0.0665;0.1459,-0.0738;0.1369,-0.0720;0.1478,-0.0827;0.1440,-0.0768;0.1456,-0.0779;0.1398,-0.0808;0.1365,-0.0703;0.1431,-0.0786;0.1357,-0.0855;0.1370,-0.0790;0.1375,-0.0801;0.1327,-0.0806;0.1363,-0.0757;0.1432,-0.0819;0.1320,-0.0822;0.1319,-0.0854;0.1334,-0.0871;0.1355,-0.0838;0.1335,-0.0844;0.1291,-0.0878;0.1306,-0.0864;0.1321,-0.0844;0.1253,-0.0842;0.1250,-0.0871;0.1287,-0.0929;0.1296,-0.0837;0.1279,-0.0856;0.1262,-0.0873;0.1258,-0.0850;0.1264,-0.0869;0.1262,-0.0807;0.1240,-0.0822;0.1260,-0.0863;0.1250,-0.0779;0.1237,-0.0767;0.1193,-0.0789;0.1240,-0.0759;0.1217,-0.0837;0.1226,-0.0732;0.1241,-0.0774;0.1136,-0.0752;0.1190,-0.0896;0.1209,-0.0860;0.1141,-0.0829;0.1242,-0.0821;0.1200,-0.0737;0.1251,-0.0810;0.1174,-0.0854;0.1153,-0.0784;0.1192,-0.0794;0.1211,-0.0828;0.1163,-0.0768;0.1183,-0.0756;0.1171,-0.0816;0.1164,-0.0850;0.1079,-0.0795;0.1139,-0.0814;0.1069,-0.0850;0.1109,-0.0877;0.1039,-0.0862;0.1162,-0.0839;0.1099,-0.0859;0.1150,-0.0973;0.1113,-0.0846;0.1143,-0.0807;0.1159,-0.0871;0.1123,-0.0861;0.1086,-0.0904;0.1140,-0.0834;0.1094,-0.0922;0.1105,-0.0872;0.1092,-0.0870;0.1052,-0.0936;0.1080,-0.0895;0.1127,-0.0984;0.1046,-0.0905;0.1054,-0.0973;0.1120,-0.0887;0.1096,-0.0920;0.1117,-0.0906;0.1118,-0.0929;0.1040,-0.0882;0.1046,-0.0861;0.1085,-0.0923;0.1080,-0.0895;0.1116,-0.0900;0.1065,-0.0817;0.1174,-0.0775;0.1089,-0.0834;0.1150,-0.0835;0.1051,-0.0814;0.1109,-0.0840;0.1026,-0.0855;0.1118,-0.0820;0.1084,-0.0776;0.1113,-0.0795;0.1106,-0.0816;0.1070,-0.0822;0.1129,-0.0783;0.1055,-0.0798;0.1078,-0.0758;0.1025,-0.0829;0.1077,-0.0688;0.1134,-0.0795;0.1127,-0.0708;0.1093,-0.0805;0.1155,-0.0771;0.1139,-0.0813;0.1195,-0.0725;0.1146,-0.0767;0.1047,-0.0770;0.1125,-0.0780;0.1164,-0.0813;0.1074,-0.0786;0.1116,-0.0817;0.1126,-0.0821;0.1062,-0.0763;0.1169,-0.0771;0.1242,-0.0819;0.1095,-0.0860;0.1122,-0.0848;0.1176,-0.0913;0.1189,-0.0898;0.1188,-0.0847;0.1165,-0.0852;0.1156,-0.0880;0.1111,-0.0864;0.1251,-0.0790;0.1228,-0.0847;0.1145,-0.0824;0.1166,-0.0890;0.1153,-0.0890;0.1143,-0.0905;0.1114,-0.0925;0.1245,-0.0921;0.1142,-0.0905;0.1179,-0.0977;0.1143,-0.0899;0.1164,-0.0932;0.1218,-0.0962;0.1163,-0.0950;0.1223,-0.0999;0.1141,-0.0932;0.1198,-0.0874;0.1231,-0.0950;0.1209,-0.0889;0.1157,-0.0847;0.1152,-0.0944;0.1179,-0.0914;0.1173,-0.0833;0.1217,-0.0777;0.1201,-0.0895;0.1182,-0.0864;0.1166,-0.0802;0.1190,-0.0892;0.1244,-0.0810;0.1230,-0.0793;0.1242,-0.0787;0.1268,-0.0762;0.1236,-0.0752;0.1166,-0.0764;0.1218,-0.0736;0.1178,-0.0665;0.1241,-0.0765;0.1173,-0.0713;0.1241,-0.0716;0.1252,-0.0700;0.1274,-0.0691;0.1254,-0.0611;0.1362,-0.0680;0.1244,-0.0664;0.1298,-0.0669;0.1251,-0.0619;0.1235,-0.0652;0.1259,-0.0696;0.1223,-0.0627;0.1290,-0.0617;0.1215,-0.0627;0.1319,-0.0586;0.1285,-0.0644;0.1315,-0.0631;0.1243,-0.0641;0.1348,-0.0602;0.1337,-0.0635;0.1328,-0.0647;0.1284,-0.0535;0.1321,-0.0670;0.1287,-0.0656;0.1338,-0.0710;0.1219,-0.0725;0.1288,-0.0733;0.1338,-0.0750;0.1316,-0.0830;0.1318,-0.0725;0.1313,-0.0821;0.1288,-0.0778;0.1244,-0.0869;0.1299,-0.0848;0.1262,-0.0875;0.1268,-0.0891;0.1274,-0.0947;0.1280,-0.0871;0.1243,-0.0917;0.1309,-0.0950;0.1291,-0.0948;0.1329,-0.0809;0.1364,-0.0907;0.1312,-0.0890;0.1285,-0.0829;0.1226,-0.0846;0.1275,-0.0829;0.1283,-0.0909;0.1284,-0.0850;0.1273,-0.0858;0.1249,-0.0961;0.1303,-0.0846;0.1270,-0.0868;0.1302,-0.0886;0.1229,-0.0871;0.1302,-0.0914;0.1299,-0.0880;0.1204,-0.0800;0.1242,-0.0900;0.1230,-0.0809;0.1290,-0.0864;0.1258,-0.0819;0.1215,-0.0835;0.1239,-0.0873;0.1220,-0.0851;0.1241,-0.0878;0.1222,-0.0812;0.1247,-0.0819;0.1285,-0.0827;0.1326,-0.0877;0.1266,-0.0848;0.1306,-0.0760;0.1151,-0.0859;0.1255,-0.0782;0.1257,-0.0811;0.1246,-0.0777;0.1225,-0.0757;0.1139,-0.0769;0.1189,-0.0752;0.1221,-0.0824;0.1245,-0.0823;0.1193,-0.0849;0.1227,-0.0766;0.1267,-0.0792;0.1266,-0.0786;0.1218,-0.0764;0.1262,-0.0801;0.1207,-0.0794;0.1217,-0.0824;0.1253,-0.0806;0.1229,-0.0827;0.1224,-0.0783;0.1193,-0.0725;0.1226,-0.0743;0.1250,-0.0849;0.1197,-0.0813;0.1215,-0.0835;0.1201,-0.0913;0.1204,-0.0931;0.1226,-0.0869;0.1180,-0.0844;0.1215,-0.0885;0.1128,-0.0860;0.1108,-0.0844;0.1243,-0.0835;0.1195,-0.0835;0.1170,-0.0782;0.1144,-0.0736;0.1206,-0.0742;0.1130,-0.0782;0.1139,-0.0747;0.1140,-0.0734;0.1169,-0.0807;0.1081,-0.0691;0.1075,-0.0759;0.1074,-0.0786;0.1087,-0.0639;0.1125,-0.0790;0.1042,-0.0772;0.1115,-0.0799;0.1045,-0.0741;0.1107,-0.0801;0.1028,-0.0856;0.1047,-0.0889;0.1108,-0.0829;0.1103,-0.0731;0.1137,-0.0852;0.1132,-0.0758;0.1076,-0.0840;0.1110,-0.0862;0.1183,-0.0889;0.1090,-0.0798;0.1136,-0.0773;0.1168,-0.0780;0.1215,-0.0848;0.1183,-0.0779;0.1200,-0.0728;0.1170,-0.0750;0.1249,-0.0699;0.1200,-0.0622;0.1327,-0.0756;0.1252,-0.0594;0.1276,-0.0686;0.1240,-0.0718;0.1242,-0.0721;0.1282,-0.0719;0.1236,-0.0757;0.1251,-0.0752;0.1244,-0.0685;0.1264,-0.0720;0.1260,-0.0752;0.1236,-0.0782;0.1267,-0.0829;0.1286,-0.0800;0.1198,-0.0835;0.1196,-0.0823;0.1190,-0.0794;0.1183,-0.0939;0.1179,-0.0934;0.1202,-0.0814;0.1224,-0.0910;0.1163,-0.0782;0.1202,-0.0846;0.1227,-0.0739;0.1233,-0.0821;0.1192,-0.0790;0.1149,-0.0846;0.1172,-0.0830;0.1163,-0.0779;0.1256,-0.0810;0.1153,-0.0778;0.1173,-0.0727;0.1133,-0.0802;0.1084,-0.0810;0.1169,-0.0777;0.1106,-0.0803;0.1147,-0.0778;0.1123,-0.0819;0.1075,-0.0865;0.1214,-0.0915;0.1139,-0.0826;0.1140,-0.0873;0.1157,-0.0845;0.1160,-0.0922;0.1161,-0.0881;0.1149,-0.0836;0.1201,-0.0806;0.1160,-0.0800;0.1231,-0.0784;0.1245,-0.0828;0.1188,-0.0781;0.1144,-0.0799;0.1182,-0.0818;0.1137,-0.0835;0.1209,-0.0763;0.1252,-0.0802;0.1208,-0.0833;0.1235,-0.0810;0.1247,-0.0732;0.1225,-0.0864;0.1195,-0.0865;0.1184,-0.0758;0.1242,-0.0873;0.1259,-0.0764;0.1217,-0.0844;0.1216,-0.0808;0.1252,-0.0774;0.1271,-0.0775;0.1273,-0.0797;0.1153,-0.0830;0.1223,-0.0842;0.1243,-0.0843;0.1165,-0.0772;0.1225,-0.0824;0.1232,-0.0795;0.1205,-0.0941;0.1162,-0.0868;0.1147,-0.0849;0.1233,-0.0883;0.1138,-0.0787;0.1165,-0.0921;0.1191,-0.0856;0.1152,-0.0842;0.1159,-0.0910;0.1185,-0.0841;0.1151,-0.0858;0.1172,-0.0757;0.1146,-0.0812;0.1172,-0.0871;0.1202,-0.0827;0.1223,-0.0847;0.1148,-0.0879;0.1193,-0.0831;0.1228,-0.0835;0.1215,-0.0787;0.1180,-0.0904;0.1128,-0.0898;0.1241,-0.0871;0.1229,-0.0810;0.1252,-0.0790;0.1183,-0.0835;0.1195,-0.0818;0.1175,-0.0824;0.1266,-0.0888;0.1216,-0.0853;0.1217,-0.0777;0.1211,-0.0772;0.1152,-0.0750;0.1194,-0.0761;0.1229,-0.0881;0.1194,-0.0761;0.1289,-0.0751;0.1239,-0.0814;0.1288,-0.0682;0.1234,-0.0763;0.1170,-0.0719;0.1345,-0.0728;0.1288,-0.0737;0.1199,-0.0707;0.1190,-0.0769;0.1250,-0.0724;0.1256,-0.0743;0.1208,-0.0807;0.1240,-0.0780;0.1183,-0.0799;0.1214,-0.0819;0.1178,-0.0808;0.1237,-0.0724;0.1308,-0.0798;0.1199,-0.0700;0.1217,-0.0748;0.1294,-0.0748;0.1179,-0.0787;0.1239,-0.0723;0.1171,-0.0776;0.1247,-0.0716;0.1199,-0.0715;0.1247,-0.0811;0.1210,-0.0721;0.1198,-0.0819;0.1207,-0.0697;0.1279,-0.0808;0.1316,-0.0758;0.1246,-0.0656;0.1244,-0.0693;0.1155,-0.0669;0.1169,-0.0791;0.1308,-0.0660;0.1265,-0.0723;0.1248,-0.0622;0.1248,-0.0686;0.1135,-0.0693;0.1092,-0.0755;0.1181,-0.0729;0.1169,-0.0697;0.1252,-0.0646;0.1172,-0.0656;0.1143,-0.0725;0.1211,-0.0768;0.1164,-0.0780;0.1180,-0.0670;0.1145,-0.0735;0.1140,-0.0799;0.1126,-0.0704;0.1270,-0.0752;0.1148,-0.0751;0.1164,-0.0755;0.1189,-0.0783;0.1203,-0.0825;0.1163,-0.0877;0.1164,-0.0872;0.1179,-0.0862;0.1194,-0.0816;0.1138,-0.0880;0.1163,-0.0832;0.1275,-0.0844;0.1199,-0.0836;0.1158,-0.0850;0.1197,-0.1034;0.1335,-0.0869;0.1191,-0.0930;0.1227,-0.0934;0.1177,-0.0963;0.1255,-0.0923;0.1282,-0.0924;0.1326,-0.0951;0.1239,-0.0994;0.1176,-0.0859;0.1186,-0.0886;0.1220,-0.0943;0.1209,-0.0917;0.1206,-0.0861;0.1255,-0.0910;0.1198,-0.0871;0.1235,-0.0835;0.1351,-0.0834;0.1249,-0.0865;0.1222,-0.0881;0.1221,-0.0846;0.1248,-0.0785;0.1254,-0.0805;0.1224,-0.0715;0.1296,-0.0693;0.1310,-0.0690;0.1268,-0.0707;0.1386,-0.0773;0.1323,-0.0647;0.1291,-0.0678;0.1322,-0.0730;0.1283,-0.0735;0.1234,-0.0723;0.1251,-0.0691;0.1270,-0.0756;0.1328,-0.0652;0.1273,-0.0717;0.1236,-0.0683;0.1254,-0.0779;0.1264,-0.0595;0.1155,-0.0678;0.1242,-0.0730;0.1280,-0.0780;0.1227,-0.0679;0.1209,-0.0764;0.1218,-0.0774;0.1272,-0.0803;0.1239,-0.0828;0.1224,-0.0792;0.1084,-0.0797;0.1138,-0.0821;0.1237,-0.0852;0.1122,-0.0748;0.1162,-0.0743;0.1163,-0.0841;0.1139,-0.0752;0.1174,-0.0802;0.1131,-0.0807;0.1099,-0.0725;0.1117,-0.0854;0.1092,-0.0781;0.1134,-0.0821;0.1077,-0.0820;0.1033,-0.0881;0.1134,-0.0856;0.1118,-0.0795;0.1132,-0.0855;0.1196,-0.0840;0.1098,-0.0848;0.1134,-0.0923;0.1124,-0.0903;0.1044,-0.0911;0.1116,-0.0926;0.1062,-0.0926;0.1130,-0.0909;0.1087,-0.0888;0.1086,-0.0923;0.1192,-0.0940;0.1120,-0.0865;0.1127,-0.0916;0.1154,-0.0854;0.1056,-0.0922;0.1107,-0.0923;0.1116,-0.0903;0.1167,-0.0895;0.1164,-0.0834;0.1135,-0.0838;0.1240,-0.0826;0.1155,-0.0840;0.1152,-0.0826;0.1233,-0.0873;0.1197,-0.0798;0.1192,-0.0841;0.1176,-0.0887;0.1202,-0.0770;0.1210,-0.0881;0.1206,-0.0867;0.1256,-0.0853;0.1313,-0.0851;0.1288,-0.0847;0.1253,-0.0914;0.1223,-0.0857;0.1217,-0.0938;0.1260,-0.0865;0.1205,-0.0856;0.1211,-0.0827;0.1167,-0.0879;0.1227,-0.0835;0.1198,-0.0863;0.1177,-0.0843;0.1255,-0.0883;0.1266,-0.0808;0.1184,-0.0811;0.1142,-0.0913;0.1147,-0.0862;0.1186,-0.0866;0.1206,-0.0930;0.1225,-0.0901;0.1184,-0.0859;0.1169,-0.0894;0.1180,-0.0836;0.1248,-0.0807;0.1187,-0.0852;0.1192,-0.0792;0.1147,-0.0748;0.1209,-0.0815;0.1241,-0.0730;0.1239,-0.0717;0.1228,-0.0701;0.1269,-0.0747;0.1273,-0.0732;0.1214,-0.0772;0.1194,-0.0702;0.1149,-0.0707;0.1211,-0.0723;0.1105,-0.0740;0.1216,-0.0768;0.1191,-0.0833;0.1212,-0.0765;0.1218,-0.0813;0.1209,-0.0749;0.1212,-0.0776;0.1155,-0.0648;0.1147,-0.0764;0.1171,-0.0776;0.1232,-0.0666;0.1160,-0.0804;0.1239,-0.0692;0.1229,-0.0693;0.1167,-0.0751;0.1151,-0.0808;0.1251,-0.0786;0.1308,-0.0764;0.1195,-0.0743;0.1297,-0.0764;0.1179,-0.0775;0.1285,-0.0816;0.1199,-0.0761;0.1235,-0.0850;0.1213,-0.0838;0.1237,-0.0806;0.1268,-0.0782;0.1156,-0.0794;0.1252,-0.0792;0.1254,-0.0832;0.1171,-0.0774;0.1164,-0.0899;0.1244,-0.0844;0.1188,-0.0874;0.1145,-0.0866;0.1180,-0.0806;0.1099,-0.0789;0.1141,-0.0858;0.1212,-0.0815;0.1120,-0.0734;0.1145,-0.0794;0.1186,-0.0746;0.1159,-0.0761;0.1147,-0.0757;0.1147,-0.0817;0.1255,-0.0791;0.1184,-0.0713;0.1195,-0.0833;0.1210,-0.0845;0.1227,-0.0745;0.1158,-0.0814;0.1187,-0.0784;0.1139,-0.0756;0.1095,-0.0791;0.1158,-0.0780;0.1186,-0.0813;0.1197,-0.0767;0.1148,-0.0811;0.1130,-0.0741;0.1143,-0.0753;0.1229,-0.0717;0.1254,-0.0774;0.1153,-0.0726;0.1213,-0.0725;0.1205,-0.0725;0.1241,-0.0746;0.1230,-0.0761;0.1222,-0.0771;0.1255,-0.0804;0.1287,-0.0790;0.1258,-0.0792;0.1210,-0.0709;0.1207,-0.0842;0.1191,-0.0803;0.1305,-0.0782;0.1256,-0.0830;0.1232,-0.0762;0.1290,-0.0816;0.1243,-0.0775;0.1178,-0.0787;0.1209,-0.0877;0.1244,-0.0760;0.1202,-0.0833;0.1277,-0.0765;0.1256,-0.0716;0.1192,-0.0736;0.1200,-0.0769;0.1204,-0.0765;0.1251,-0.0760;0.1200,-0.0777;0.1221,-0.0803;0.1190,-0.0770;0.1191,-0.0773;0.1192,-0.0687;0.1273,-0.0748;0.1220,-0.0677;0.1236,-0.0767;0.1236,-0.0751;0.1279,-0.0764;0.1305,-0.0799;0.1246,-0.0804;0.1287,-0.0777;0.1207,-0.0726;0.1254,-0.0807;0.1183,-0.0818;0.1196,-0.0765;0.1170,-0.0785;0.1163,-0.0785;0.1194,-0.0692;0.1092,-0.0755;0.1149,-0.0731;0.1126,-0.0758;0.1121,-0.0727;0.1167,-0.0766;0.1178,-0.0774;0.1103,-0.0746;0.1178,-0.0781;0.1208,-0.0730;0.1126,-0.0813;0.1234,-0.0728;0.1143,-0.0835;0.1149,-0.0810;0.1112,-0.0791;0.1126,-0.0843;0.1215,-0.0825;0.1177,-0.0774;0.1214,-0.0815;0.1185,-0.0835;0.1255,-0.0777;0.1144,-0.0804;0.1219,-0.0787;0.1267,-0.0754;0.1176,-0.0816;0.1150,-0.0804;0.1211,-0.0707;0.1212,-0.0899;0.1184,-0.0811;0.1164,-0.0849;0.1201,-0.0799;0.1210,-0.0847;0.1249,-0.0832;0.1197,-0.0866;0.1186,-0.0785;0.1152,-0.0817;0.1245,-0.0833;0.1224,-0.0868;0.1266,-0.0786;0.1221,-0.0908;0.1168,-0.0806;0.1276,-0.0841;0.1255,-0.0884;0.1196,-0.0865;0.1219,-0.0929;0.1239,-0.0817;0.1156,-0.0923;0.1217,-0.0891;0.1110,-0.0827;0.1212,-0.0870;0.1293,-0.0837;0.1180,-0.0831;0.1169,-0.0859;0.1227,-0.0847;0.1195,-0.0756;0.1249,-0.0790;0.1238,-0.0803;0.1278,-0.0825;0.1297,-0.0864;0.1215,-0.0883;0.1214,-0.0810;0.1287,-0.0860;0.1230,-0.0852;0.1201,-0.0888;0.1234,-0.0913;0.1236,-0.0845;0.1206,-0.0887;0.1177,-0.0773;0.1179,-0.0785;0.1257,-0.0863;0.1188,-0.0806;0.1305,-0.0884;0.1226,-0.0803;0.1253,-0.0761;0.1219,-0.0815;0.1194,-0.0746;0.1217,-0.0911;0.1243,-0.0819;0.1325,-0.0817;0.1248,-0.0768;0.1312,-0.0782;0.1289,-0.0747;0.1233,-0.0754;0.1243,-0.0785;0.1287,-0.0798;0.1281,-0.0700;0.1225,-0.0768;0.1215,-0.0719;0.1249,-0.0730;0.1255,-0.0769;0.1222,-0.0816;0.1241,-0.0756;0.1192,-0.0725;0.1234,-0.0893;0.1205,-0.0848;0.1243,-0.0699;0.1177,-0.0804;0.1185,-0.0799;0.1218,-0.0767;0.1151,-0.0758;0.1153,-0.0811;0.1236,-0.0794;0.1154,-0.0852;0.1174,-0.0828;0.1240,-0.0881;0.1214,-0.0807;0.1218,-0.0816;0.1256,-0.0818;0.1228,-0.0816;0.1262,-0.0916;0.1238,-0.0850;0.1171,-0.0877;0.1101,-0.0851;0.1143,-0.0813;0.1106,-0.0773;0.1172,-0.0839;0.1130,-0.0860;0.1111,-0.0850;0.1156,-0.0834;0.1099,-0.0836;0.1121,-0.0816;0.1233,-0.0793;0.1147,-0.0878;0.1103,-0.0876;0.1188,-0.0835;0.1160,-0.0826;0.1160,-0.0743;0.1126,-0.0811;0.1118,-0.0762;0.1106,-0.0842;0.1088,-0.0854;0.1160,-0.0697;0.1099,-0.0765;0.1147,-0.0851;0.1126,-0.0820;0.1110,-0.0736;0.1062,-0.0801;0.1153,-0.0841;0.1148,-0.0785;0.1150,-0.0806;0.1173,-0.0905;0.1205,-0.0732;0.1186,-0.0779;0.1092,-0.0819;0.1118,-0.0829;0.1191,-0.0828;0.1150,-0.0861;0.1152,-0.0771;0.1133,-0.0794;0.1238,-0.0806;0.1122,-0.0785;0.1213,-0.0668;0.1179,-0.0782;0.1149,-0.0716;0.1131,-0.0706;0.1224,-0.0769;0.1194,-0.0750;0.1231,-0.0829;0.1216,-0.0809;0.1138,-0.0796;0.1160,-0.0845;0.1104,-0.0847;0.1227,-0.0735;0.1195,-0.0769;0.1150,-0.0822;0.1185,-0.0864;0.1137,-0.0818;0.1167,-0.0864;0.1199,-0.0830;0.1228,-0.0817;0.1179,-0.0809;0.1188,-0.0837;0.1183,-0.0777;0.1228,-0.0751;0.1138,-0.0813;0.1192,-0.0786;0.1194,-0.0810;0.1247,-0.0781;0.1173,-0.0735;0.1263,-0.0813;0.1259,-0.0823;0.1273,-0.0806;0.1197,-0.0817;0.1199,-0.0799;0.1237,-0.0809;0.1209,-0.0960;0.1235,-0.0893;0.1242,-0.0775;0.1245,-0.0837;0.1228,-0.0827;0.1217,-0.0843;0.1205,-0.0770;0.1245,-0.0775;0.1239,-0.0805;0.1245,-0.0783;0.1288,-0.0786;0.1230,-0.0820;0.1325,-0.0794;0.1249,-0.0719;0.1307,-0.0751;0.1250,-0.0674;0.1284,-0.0741;0.1263,-0.0814;0.1218,-0.0736;0.1288,-0.0757;0.1227,-0.0801;0.1261,-0.0798;0.1311,-0.0689;0.1389,-0.0696;0.1251,-0.0763;0.1136,-0.0750;0.1266,-0.0686;0.1296,-0.0702;0.1278,-0.0701;0.1325,-0.0773;0.1247,-0.0790;0.1327,-0.0687;0.1289,-0.0792;0.1262,-0.0757;0.1254,-0.0759;0.1267,-0.0771;0.1277,-0.0748;0.1227,-0.0765;0.1219,-0.0731;0.1224,-0.0756;0.1218,-0.0832;0.1269,-0.0820;0.1259,-0.0764;0.1165,-0.0821;0.1209,-0.0816;0.1181,-0.0754;0.1217,-0.0767;0.1207,-0.0768;0.1193,-0.0778;0.1245,-0.0771;0.1203,-0.0811;0.1227,-0.0747;0.1209,-0.0786;0.1241,-0.0651;0.1206,-0.0735;0.1233,-0.0850;0.1223,-0.0778;0.1273,-0.0763;0.1186,-0.0767;0.1224,-0.0787;0.1216,-0.0826;0.1209,-0.0750;0.1297,-0.0762;0.1230,-0.0750;0.1260,-0.0737;0.1262,-0.0812;0.1228,-0.0802;0.1229,-0.0802;0.1184,-0.0895;0.1186,-0.0891;0.1213,-0.0810;0.1140,-0.0785;0.1239,-0.0812;0.1269,-0.0746;0.1153,-0.0785;0.1219,-0.0816;0.1239,-0.0868;0.1179,-0.0877;0.1171,-0.0853;0.1142,-0.0894;0.1220,-0.0857;0.1208,-0.0930;0.1157,-0.0875;0.1184,-0.0873;0.1213,-0.0848;0.1170,-0.0841;0.1192,-0.0855;0.1202,-0.0814;0.1158,-0.0827;0.1167,-0.0785;0.1180,-0.0809;0.1174,-0.0817;0.1187,-0.0823;0.1053,-0.0768;0.1140,-0.0869;0.1129,-0.0857;0.1223,-0.0803;0.1079,-0.0801;0.1130,-0.0747;0.1107,-0.0915;0.1156,-0.0841;0.1141,-0.0915;0.1179,-0.0764;0.1090,-0.0785;0.1147,-0.0738;0.1192,-0.0839;0.1224,-0.0810;0.1160,-0.0802;0.1168,-0.0901;0.1272,-0.0842;0.1168,-0.0813;0.1129,-0.0880;0.1169,-0.0848;0.1189,-0.0783;0.1163,-0.0810;0.1202,-0.0875;0.1182,-0.0870;0.1212,-0.0815;0.1166,-0.0886;0.1168,-0.0863;0.1190,-0.0837;0.1127,-0.0795;0.1188,-0.0856;0.1205,-0.0845;0.1145,-0.0829;0.1127,-0.0854;0.1149,-0.0778;0.1215,-0.0851;0.1219,-0.0844;0.1169,-0.0807;0.1166,-0.0745;0.1164,-0.0888;0.1208,-0.0854;0.1147,-0.0955;0.1203,-0.0800;0.1199,-0.0792;0.1241,-0.0832;0.1217,-0.0860;0.1173,-0.0790;0.1210,-0.0887;0.1216,-0.0842;0.1175,-0.0817;0.1198,-0.0895;0.1176,-0.0758;0.1164,-0.0815;0.1253,-0.0793;0.1182,-0.0825;0.1239,-0.0776;0.1208,-0.0851;0.1274,-0.0760;0.1248,-0.0829;0.1248,-0.0804;0.1263,-0.0863;0.1233,-0.0826;0.1182,-0.0818;0.1226,-0.0850;0.1239,-0.0895;0.1219,-0.0825;0.1230,-0.0800;0.1168,-0.0901;0.1222,-0.0818;0.1292,-0.0806;0.1168,-0.0791;0.1164,-0.0874;0.1298,-0.0792;0.1218,-0.0773;0.1258,-0.0776;0.1232,-0.0820;0.1126,-0.0715;0.1240,-0.0745;0.1190,-0.0753;0.1153,-0.0693;0.1208,-0.0730;0.1197,-0.0708;0.1203,-0.0722;0.1136,-0.0737;0.1270,-0.0786;0.1176,-0.0738;0.1217,-0.0757;0.1110,-0.0769;0.1123,-0.0827;0.1187,-0.0809;0.1192,-0.0673;0.1186,-0.0770;0.1114,-0.0823;0.1104,-0.0817;0.1101,-0.0821;0.1135,-0.0832;0.1086,-0.0845;0.1162,-0.0787;0.1186,-0.0747;0.1131,-0.0761;0.1087,-0.0697;0.1192,-0.0798;0.1097,-0.0777;0.1067,-0.0826;0.1171,-0.0794;0.1119,-0.0761;0.1096,-0.0787;0.1116,-0.0830;0.1153,-0.0830;0.1212,-0.0806;0.1218,-0.0817;0.1166,-0.0812;0.1094,-0.0749;0.1182,-0.0797;0.1210,-0.0770;0.1175,-0.0717;0.1200,-0.0799;0.1247,-0.0700;0.1170,-0.0761;0.1123,-0.0774;0.1217,-0.0734;0.1154,-0.0744;0.1266,-0.0740;0.1185,-0.0679;0.1232,-0.0738;0.1194,-0.0810;0.1177,-0.0775;0.1221,-0.0750;0.1259,-0.0763;0.1252,-0.0817;0.1163,-0.0801;0.1218,-0.0806;0.1251,-0.0827;0.1223,-0.0778;0.1277,-0.0796;0.1297,-0.0775;0.1240,-0.0762;0.1359,-0.0789;0.1332,-0.0705;0.1347,-0.0793;0.1369,-0.0756;0.1279,-0.0770;0.1314,-0.0760;0.1283,-0.0713;0.1260,-0.0808;0.1320,-0.0740;0.1331,-0.0813;0.1329,-0.0753;0.1355,-0.0823;0.1291,-0.0785;0.1216,-0.0804;0.1322,-0.0796;0.1246,-0.0744;0.1311,-0.0740;0.1237,-0.0783;0.1307,-0.0808;0.1233,-0.0749;0.1322,-0.0830;0.1153,-0.0843;0.1213,-0.0792;0.1275,-0.0794;0.1219,-0.0782;0.1207,-0.0791;0.1217,-0.0682;0.1274,-0.0823;0.1198,-0.0809;0.1169,-0.0822;0.1202,-0.0760;0.1211,-0.0831;0.1172,-0.0851;0.1221,-0.0817;0.1267,-0.0839;0.1262,-0.0808;0.1217,-0.0902;0.1162,-0.0793;0.1266,-0.0813;0.1237,-0.0834;0.1188,-0.0840;0.1239,-0.0795;0.1188,-0.0818;0.1219,-0.0789;0.1164,-0.0732;0.1208,-0.0801;0.1260,-0.0762;0.1201,-0.0785;0.1166,-0.0837;0.1124,-0.0768;0.1144,-0.0796;0.1191,-0.0868;0.1220,-0.0823;0.1255,-0.0767;0.1244,-0.0805;0.1204,-0.0815;0.1230,-0.0864;0.1215,-0.0850;0.1220,-0.0835;0.1185,-0.0883;0.1227,-0.0925;0.1165,-0.0798;0.1074,-0.0891;0.1203,-0.0930;0.1274,-0.0968;0.1223,-0.0801;0.1198,-0.0870;0.1173,-0.0894;0.1189,-0.0899;0.1144,-0.0811;0.1108,-0.0862;0.1157,-0.0898;0.1195,-0.0827;0.1084,-0.0838;0.1110,-0.0860;0.1140,-0.0859;0.1172,-0.0859;0.1169,-0.0833;0.1162,-0.0854;0.1107,-0.0881;0.1150,-0.0800;0.1213,-0.0787;0.1140,-0.0849;0.1148,-0.0843;0.1194,-0.0804;0.1104,-0.0869;0.1195,-0.0829;0.1134,-0.0793;0.1130,-0.0851;0.1131,-0.0917;0.1187,-0.0887;0.1133,-0.0869;0.1188,-0.0844;0.1163,-0.0910;0.1161,-0.0905;0.1180,-0.0835;0.1170,-0.0770;0.1194,-0.0831;0.1182,-0.0864;0.1219,-0.0814;0.1132,-0.0818;0.1209,-0.0823;0.1211,-0.0911;0.1150,-0.0788;0.1210,-0.0915;0.1216,-0.0868;0.1130,-0.0940;0.1140,-0.0831;0.1202,-0.0844;0.1215,-0.0801;0.1119,-0.0828;0.1170,-0.0856;0.1181,-0.0803;0.1192,-0.0848;0.1184,-0.0702;0.1161,-0.0844;0.1214,-0.0748;0.1222,-0.0813;0.1244,-0.0796;0.1158,-0.0787;0.1197,-0.0732;0.1224,-0.0759;0.1233,-0.0752;0.1229,-0.0807;0.1128,-0.0715;0.1135,-0.0752;0.1187,-0.0752;0.1174,-0.0669;0.1093,-0.0683;0.1288,-0.0712;0.1197,-0.0679;0.1272,-0.0752;0.1202,-0.0710;0.1219,-0.0694;0.1222,-0.0718;0.1197,-0.0731;0.1167,-0.0716;0.1188,-0.0765;0.1257,-0.0734;0.1138,-0.0696;0.1164,-0.0730;0.1193,-0.0750;0.1201,-0.0792;0.1197,-0.0693;0.1106,-0.0776;0.1213,-0.0823;0.1141,-0.0694;0.1180,-0.0695;0.1215,-0.0771;0.1212,-0.0744;0.1238,-0.0748;0.1194,-0.0755;0.1240,-0.0727;0.1144,-0.0785;0.1195,-0.0785;0.1165,-0.0801;0.1168,-0.0749;0.1217,-0.0768;0.1259,-0.0775;0.1303,-0.0733;0.1194,-0.0794;0.1061,-0.0780;0.1181,-0.0696;0.1118,-0.0696;0.1164,-0.0741;0.1073,-0.0764;0.1163,-0.0742;0.1181,-0.0817;0.1217,-0.0748;0.1204,-0.0740;0.1225,-0.0786;0.1129,-0.0845;0.1239,-0.0766;0.1191,-0.0816;0.1191,-0.0801;0.1179,-0.0832;0.1282,-0.0798;0.1173,-0.0862;0.1171,-0.0784;0.1232,-0.0823;0.1206,-0.0827;0.1161,-0.0763;0.1221,-0.0714;0.1177,-0.0815;0.1243,-0.0816;0.1152,-0.0840;0.1212,-0.0784;0.1204,-0.0755;0.1248,-0.0780;0.1210,-0.0802;0.1230,-0.0755;0.1210,-0.0774;0.1193,-0.0850;0.1165,-0.0764;0.1221,-0.0732;0.1204,-0.0763;0.1254,-0.0759;0.1176,-0.0809;0.1204,-0.0845;0.1217,-0.0769;0.1178,-0.0736;0.1185,-0.0830;0.1187,-0.0857;0.1215,-0.0835;0.1266,-0.0817;0.1224,-0.0855;0.1150,-0.0851;0.1177,-0.0808;0.1214,-0.0774;0.1248,-0.0798;0.1232,-0.0810;0.1253,-0.0767;0.1202,-0.0769;0.1339,-0.0779;0.1229,-0.0792;0.1185,-0.0711;0.1251,-0.0746;0.1327,-0.0660;0.1222,-0.0723;0.1286,-0.0756;0.1284,-0.0779;0.1330,-0.0759;0.1281,-0.0738;0.1303,-0.0772;0.1277,-0.0721;0.1281,-0.0794;0.1221,-0.0803;0.1206,-0.0783;0.1250,-0.0868;0.1231,-0.0757;0.1227,-0.0819;0.1262,-0.0807;0.1152,-0.0822;0.1193,-0.0739;0.1233,-0.0772;0.1134,-0.0810;0.1143,-0.0795;0.1107,-0.0790;0.1203,-0.0806;0.1197,-0.0843;0.1122,-0.0836;0.1228,-0.0773;0.1165,-0.0769;0.1173,-0.0760;0.1207,-0.0842;0.1222,-0.0857;0.1155,-0.0887;0.1204,-0.0833;0.1191,-0.0849;0.1251,-0.0850;0.1163,-0.0784;0.1247,-0.0820;0.1119,-0.0858;0.1210,-0.0833;0.1246,-0.0889;0.1210,-0.0860;0.1235,-0.0839;0.1224,-0.0864;0.1128,-0.0884;0.1162,-0.0884;0.1236,-0.0794;0.1200,-0.0894;0.1185,-0.0886;0.1247,-0.0852;0.1207,-0.0886;0.1106,-0.0906;0.1141,-0.0864;0.1189,-0.0913;0.1169,-0.0819;0.1148,-0.0919;0.1179,-0.0909;0.1175,-0.0857;0.1266,-0.0947;0.1202,-0.0870;0.1207,-0.0875;0.1205,-0.0823;0.1210,-0.0864;0.1238,-0.0850;0.1241,-0.0809;0.1256,-0.0838;0.1263,-0.0880;0.1239,-0.0878;0.1286,-0.0860;0.1241,-0.0819;0.1308,-0.0896;0.1357,-0.0822;0.1287,-0.0779;0.1295,-0.0844;0.1379,-0.0860;0.1286,-0.0782;0.1245,-0.0818;0.1300,-0.0717;0.1245,-0.0813;0.1303,-0.0805;0.1225,-0.0789;0.1273,-0.0786;0.1310,-0.0761;0.1276,-0.0788;0.1211,-0.0806;0.1259,-0.0816;0.1249,-0.0833;0.1301,-0.0714;0.1220,-0.0782;0.1221,-0.0744;0.1242,-0.0787;0.1210,-0.0780;0.1174,-0.0754;0.1180,-0.0757;0.1209,-0.0734;0.1199,-0.0737;0.1160,-0.0755;0.1186,-0.0773;0.1198,-0.0745;0.1115,-0.0769;0.1137,-0.0732;0.1120,-0.0819;0.1133,-0.0710;0.1150,-0.0769;0.1181,-0.0844;0.1190,-0.0746;0.1196,-0.0736;0.1189,-0.0775;0.1187,-0.0763;0.1277,-0.0763;0.1205,-0.0802;0.1163,-0.0718;0.1144,-0.0810;0.1180,-0.0787;0.1258,-0.0862;0.1190,-0.0735;0.1126,-0.0787;0.1184,-0.0694;0.1127,-0.0821;0.1200,-0.0696;0.1145,-0.0845;0.1214,-0.0765;0.1200,-0.0760;0.1141,-0.0779;0.1215,-0.0707;0.1072,-0.0805;0.1229,-0.0785;0.1104,-0.0773;0.1154,-0.0780;0.1139,-0.0791;0.1139,-0.0767;0.1125,-0.0794;0.1152,-0.0732;0.1173,-0.0790;0.1180,-0.0770;0.1203,-0.0765;0.1232,-0.0731;0.1159,-0.0799;0.1195,-0.0760;0.1154,-0.0839;0.1082,-0.0764;0.1184,-0.0745;0.1101,-0.0735;0.1131,-0.0759;0.1170,-0.0804;0.1133,-0.0852;0.1124,-0.0840;0.1182,-0.0764;0.1204,-0.0751;0.1145,-0.0750;0.1156,-0.0739;0.1184,-0.0801;0.1169,-0.0758;0.1154,-0.0722;0.1231,-0.0769;0.1145,-0.0841;0.1152,-0.0767;0.1070,-0.0736;0.1181,-0.0777;0.1145,-0.0787;0.1195,-0.0811;0.1157,-0.0674;0.1177,-0.0736;0.1174,-0.0804;0.1183,-0.0743;0.1146,-0.0749;0.1239,-0.0724;0.1126,-0.0809;0.1125,-0.0731;0.1212,-0.0749;0.1151,-0.0828;0.1187,-0.0782;0.1146,-0.0786;0.1203,-0.0789;0.1133,-0.0891;0.1162,-0.0808;0.1160,-0.0840;0.1143,-0.0804;0.1170,-0.0837;0.1136,-0.0875;0.1186,-0.0899;0.1135,-0.0879;0.1239,-0.0865;0.1255,-0.0883;0.1190,-0.0938;0.1185,-0.0827;0.1225,-0.0856;0.1245,-0.0884;0.1212,-0.0876;0.1252,-0.0858;0.1250,-0.0865;0.1204,-0.0877;0.1203,-0.0822;0.1162,-0.0867;0.1346,-0.0871;0.1208,-0.0857;0.1307,-0.0862;0.1281,-0.0850;0.1242,-0.0726;0.1260,-0.0869;0.1237,-0.0828;0.1274,-0.0807;0.1263,-0.0891;0.1280,-0.0843;0.1248,-0.0888;0.1238,-0.0857;0.1261,-0.0885;0.1267,-0.0821;0.1223,-0.0849;0.1238,-0.0786;0.1175,-0.0833;0.1212,-0.0833;0.1315,-0.0836;0.1288,-0.0840;0.1360,-0.0764;0.1326,-0.0848;0.1235,-0.0747;0.1268,-0.0797;0.1286,-0.0834;0.1300,-0.0782;0.1286,-0.0809;0.1285,-0.0811;0.1300,-0.0738;0.1297,-0.0763;0.1284,-0.0893;0.1289,-0.0797;0.1256,-0.0798;0.1192,-0.0810;0.1268,-0.0732;0.1211,-0.0826;0.1287,-0.0825;0.1304,-0.0787;0.1177,-0.0749;0.1270,-0.0845;0.1255,-0.0797;0.1243,-0.0798;0.1111,-0.0758;0.1204,-0.0689;0.1229,-0.0738;0.1146,-0.0779;0.1139,-0.0783;0.1137,-0.0844;0.1153,-0.0737;0.1248,-0.0702;0.1125,-0.0708;0.1096,-0.0756;0.1071,-0.0679;0.1169,-0.0789;0.1143,-0.0710;0.1163,-0.0740;0.1107,-0.0787;0.1143,-0.0730;0.1103,-0.0817;0.1180,-0.0815;0.1175,-0.0774;0.1166,-0.0720;0.1158,-0.0766;0.1093,-0.0832;0.1156,-0.0748;0.1186,-0.0720;0.1144,-0.0806;0.1173,-0.0814;0.1133,-0.0855;0.1178,-0.0855;0.1164,-0.0868;0.1192,-0.0851;0.1188,-0.0873;0.1142,-0.0762;0.1134,-0.0805;0.1153,-0.0900;0.1191,-0.0790;0.1140,-0.0785;0.1157,-0.0848;0.1193,-0.0836;0.1288,-0.0871;0.1229,-0.0768;0.1123,-0.0876;0.1227,-0.0824;0.1223,-0.0756;0.1195,-0.0842;0.1104,-0.0789;0.1179,-0.0782;0.1229,-0.0849;0.1291,-0.0751;0.1258,-0.0842;0.1208,-0.0817;0.1207,-0.0841;0.1238,-0.0787;0.1232,-0.0817;0.1264,-0.0790;0.1099,-0.0824;0.1202,-0.0760;0.1188,-0.0809;0.1170,-0.0772;0.1175,-0.0823;0.1160,-0.0777;0.1165,-0.0868;0.1209,-0.0832;0.1197,-0.0793;0.1229,-0.0772;0.1157,-0.0826;0.1128,-0.0758;0.1195,-0.0775;0.1162,-0.0917;0.1233,-0.0833;0.1173,-0.0834;0.1188,-0.0811;0.1094,-0.0783;0.1132,-0.0839;0.1217,-0.0777;0.1130,-0.0883;0.1147,-0.0785;0.1134,-0.0856;0.1103,-0.0858;0.1141,-0.0777;0.1172,-0.0839;0.1140,-0.0786;0.1110,-0.0810;0.1216,-0.0790;0.1168,-0.0809;0.1136,-0.0854;0.1135,-0.0732;0.1222,-0.0727;0.1168,-0.0769;0.1119,-0.0776;0.1170,-0.0801;0.1186,-0.0810;0.1081,-0.0813;0.1090,-0.0830;0.1207,-0.0786;0.1177,-0.0735;0.1225,-0.0805;0.1235,-0.0772;0.1188,-0.0771;0.1136,-0.0821;0.1193,-0.0764;0.1184,-0.0792;0.1239,-0.0731;0.1230,-0.0737;0.1183,-0.0802;0.1211,-0.0804;0.1177,-0.0728;0.1190,-0.0834;0.1218,-0.0724;0.1203,-0.0750;0.1183,-0.0821;0.1175,-0.0809;0.1279,-0.0850;0.1273,-0.0845;0.1201,-0.0770;0.1239,-0.0791;0.1151,-0.0786;0.1179,-0.0698;0.1215,-0.0794;0.1180,-0.0823;0.1178,-0.0768;0.1222,-0.0790;0.1210,-0.0837;0.1295,-0.0861;0.1179,-0.0812;0.1214,-0.0852;0.1306,-0.0874;0.1316,-0.0875;0.1353,-0.0800;0.1287,-0.0867;0.1285,-0.0854;0.1375,-0.0922;0.1376,-0.0918;0.1312,-0.0936;0.1436,-0.0861;0.1365,-0.0887;0.1399,-0.0940;0.1357,-0.0763;0.1337,-0.0845;0.1374,-0.0872;0.1340,-0.0796;0.1338,-0.0813;0.1307,-0.0810;0.1314,-0.0760;0.1332,-0.0824;0.1196,-0.0782;0.1316,-0.0843;0.1198,-0.0846;0.1308,-0.0836;0.1245,-0.0776;0.1306,-0.0775;0.1246,-0.0784;0.1308,-0.0707;0.1233,-0.0794;0.1198,-0.0706;0.1194,-0.0687;0.1230,-0.0706;0.1233,-0.0697;0.1164,-0.0731;0.1281,-0.0770;0.1156,-0.0684;0.1155,-0.0767;0.1093,-0.0723;0.1170,-0.0701;0.1113,-0.0730;0.1050,-0.0781;0.1045,-0.0796';
+  function exampleBalanceCSV() {
+    var out = ['Time(s),AccX(m/s²),AccY(m/s²),AccZ(m/s²)'], p = BAL_XY.split(';'), seed = 11;
+    function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    for (var i = 0; i < p.length; i++) {
+      out.push([(i / 100).toFixed(2), p[i], (9.81 + (rnd() - 0.5) * 0.014).toFixed(4)].join(','));
+    }
+    return out.join('\n');
+  }
+
+  /* ---------- copy ---------- */
+  function toast(msg) {
+    $('toast').textContent = msg;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { $('toast').textContent = ''; }, 2600);
+  }
+  function showBox(text) {
+    $('copybox').style.display = 'flex';
+    var ta = $('copytext');
+    ta.value = text; ta.focus(); ta.select();
+  }
+  function copyText(text, label) {
+    $('copybox').style.display = 'none';
+    var done = function () { toast(label + ' copied.'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { showBox(text); });
+    } else showBox(text);
+  }
+  /* ================= analysis tools ================= */
+  function win() {
+    if (!D) return null;
+    var lo = lowerBound(D.t, sel[0] - 1e-9), hi = upperBound(D.t, sel[1] + 1e-9);
+    return hi - lo + 1 >= 2 ? { lo: lo, hi: hi, n: hi - lo + 1 } : null;
+  }
+  function cell(tr, text) { var td = document.createElement('td'); td.textContent = text; tr.appendChild(td); return td; }
+  function clearBody(id) { var b = $(id); b.innerHTML = ''; return b; }
+  function numVal(id, dflt) { var v = parseFloat($(id).value); return isFinite(v) ? v : dflt; }
+
+  /* ---- peaks ---- */
+  function findPeaks() {
+    var w = win(); if (!w) return [];
+    var key = $('pk-sig').value, a = D[key], sgn = $('pk-mode').value === 'max' ? 1 : -1;
+    var thr = sgn * numVal('pk-thr', 0), gap = Math.max(0, numVal('pk-gap', 0.3));
+    var cand = [];
+    for (var i = Math.max(w.lo, 1); i <= Math.min(w.hi, D.n - 2); i++) {
+      var v = sgn * a[i];
+      if (v >= thr && v > sgn * a[i - 1] && v >= sgn * a[i + 1]) cand.push(i);
+    }
+    cand.sort(function (p, q) { return sgn * a[q] - sgn * a[p]; });
+    var acc = [];
+    cand.forEach(function (i) {
+      for (var k = 0; k < acc.length; k++) if (Math.abs(D.t[i] - D.t[acc[k]]) < gap) return;
+      acc.push(i);
+    });
+    acc.sort(function (p, q) { return p - q; });
+    return acc.map(function (i) { return { i: i, t: D.t[i], v: a[i] }; });
+  }
+  function renderPeaks() {
+    var body = clearBody('pk-body'), sum = $('pk-summary');
+    lastPeaks = []; lastPkRate = '';
+    var w = win();
+    if (!w) { sum.textContent = D ? 'Select a window with at least two samples.' : ''; return; }
+    var key = $('pk-sig').value, mode = $('pk-mode').value;
+    if (pkAuto) {
+      var o = stats().out[key];
+      $('pk-thr').value = (mode === 'max' ? o.mean + 0.5 * (o.max - o.mean) : o.mean - 0.5 * (o.mean - o.min)).toFixed(1);
+    }
+    lastPeaks = findPeaks();
+    var n = lastPeaks.length, word = mode === 'max' ? 'peak' : 'valley';
+    if (!n) { sum.textContent = 'No ' + word + 's found beyond the threshold. Try moving the threshold toward the middle, or lower the minimum time between.'; return; }
+    var text = n + ' ' + word + (n === 1 ? '' : 's') + ' found.';
+    if (n >= 2) {
+      var mean = (lastPeaks[n - 1].t - lastPeaks[0].t) / (n - 1);
+      lastPkRate = 60 / mean;
+      text += ' Average time between ' + word + 's: ' + mean.toFixed(3) + ' s, which is ' + lastPkRate.toFixed(1) + ' per minute.';
+    }
+    sum.textContent = text;
+    lastPeaks.slice(0, 300).forEach(function (p, i) {
+      var tr = document.createElement('tr');
+      cell(tr, String(i + 1)); cell(tr, p.t.toFixed(3)); cell(tr, fmt(p.v, 3));
+      if (i > 0) { var dt = p.t - lastPeaks[i - 1].t; cell(tr, dt.toFixed(3)); cell(tr, (60 / dt).toFixed(1)); } else { cell(tr, '–'); cell(tr, '–'); }
+      body.appendChild(tr);
+    });
+  }
+
+  /* ---- balance (sway) ---- */
+    var CHI95 = 5.991;
+  function balCompute(w, k1, k2) {
+    var a = D[k1], b = D[k2], n = w.n, i, m1 = 0, m2 = 0;
+    for (i = w.lo; i <= w.hi; i++) { m1 += a[i]; m2 += b[i]; }
+    m1 /= n; m2 /= n;
+    var u = new Float64Array(n), v = new Float64Array(n);
+    for (i = 0; i < n; i++) { u[i] = a[w.lo + i] - m1; v[i] = b[w.lo + i] - m2; }
+    var pu = 0, pv = 0, pt = 0, sxx = 0, syy = 0, sxy = 0, sd = 0, maxd = 0, sq = 0, umin = Infinity, umax = -Infinity, vmin = Infinity, vmax = -Infinity, maxAbs = 0;
+    for (i = 0; i < n; i++) {
+      sxx += u[i] * u[i]; syy += v[i] * v[i]; sxy += u[i] * v[i];
+      var d = Math.sqrt(u[i] * u[i] + v[i] * v[i]); sd += d; sq += d * d; if (d > maxd) maxd = d;
+      if (u[i] < umin) umin = u[i]; if (u[i] > umax) umax = u[i]; if (v[i] < vmin) vmin = v[i]; if (v[i] > vmax) vmax = v[i];
+      maxAbs = Math.max(maxAbs, Math.abs(u[i]), Math.abs(v[i]));
+      if (i > 0) { var du = u[i] - u[i - 1], dv = v[i] - v[i - 1]; pu += Math.abs(du); pv += Math.abs(dv); pt += Math.sqrt(du * du + dv * dv); }
+    }
+    var dur = D.t[w.hi] - D.t[w.lo];
+    var cxx = sxx / (n - 1), cyy = syy / (n - 1), cxy = sxy / (n - 1);
+    var tr = cxx + cyy, det = cxx * cyy - cxy * cxy, disc = Math.sqrt(Math.max(0, tr * tr / 4 - det));
+    var l1 = tr / 2 + disc, l2 = Math.max(0, tr / 2 - disc);
+    var A = Math.sqrt(CHI95 * l1), B = Math.sqrt(CHI95 * l2), th = 0.5 * Math.atan2(2 * cxy, cxx - cyy);
+    var ct = Math.cos(th), st = Math.sin(th), inside = 0;
+    if (B > 0) for (i = 0; i < n; i++) { var pp = u[i] * ct + v[i] * st, qq = -u[i] * st + v[i] * ct; if ((pp / A) * (pp / A) + (qq / B) * (qq / B) <= 1) inside++; } else inside = n;
+    return { u: u, v: v, n: n, m1: m1, m2: m2, dur: dur, path: pt, pathU: pu, pathV: pv, rmsU: Math.sqrt(sxx / n), rmsV: Math.sqrt(syy / n), rmsD: Math.sqrt(sq / n), meanD: sd / n, maxD: maxd,
+      rangeU: umax - umin, rangeV: vmax - vmin, A: A, B: B, th: th, area: Math.PI * A * B, inside: inside / n * 100,
+      ex: Math.sqrt(CHI95 * cxx), ey: Math.sqrt(CHI95 * cyy), maxAbs: maxAbs };
+  }
+  function balRows(S) {
+    var v = S.dur > 0 ? S.dur : NaN;
+    return [
+      ['Path length', S.path, 'm/s²', 3], ['Path length, side to side', S.pathU, 'm/s²', 3], ['Path length, front to back', S.pathV, 'm/s²', 3],
+      ['Mean path velocity', S.path / v, 'm/s³', 3], ['Mean velocity, side to side', S.pathU / v, 'm/s³', 3], ['Mean velocity, front to back', S.pathV / v, 'm/s³', 3],
+      ['RMS distance from centre', S.rmsD, 'm/s²', 4], ['RMS side to side', S.rmsU, 'm/s²', 4], ['RMS front to back', S.rmsV, 'm/s²', 4],
+      ['Range side to side', S.rangeU, 'm/s²', 4], ['Range front to back', S.rangeV, 'm/s²', 4],
+      ['Largest distance from centre', S.maxD, 'm/s²', 4],
+      ['95% ellipse area', S.area, '(m/s²)²', 5], ['Ellipse long axis (full length)', 2 * S.A, 'm/s²', 4], ['Ellipse short axis (full length)', 2 * S.B, 'm/s²', 4],
+      ['Samples inside the ellipse', S.inside, '%', 1]
+    ];
+  }
+  function isDark() {
+    var c = css('--bg'), m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
+    return m ? (parseInt(m[1], 16) + parseInt(m[2], 16) + parseInt(m[3], 16)) / 3 < 128 : false;
+  }
+  function mixc(c0, c1, f) { return 'rgb(' + [0, 1, 2].map(function (k) { return Math.round(c0[k] + (c1[k] - c0[k]) * f); }).join(',') + ')'; }
+  function drawStab(ctx, W, H, th, title, showEll) {
+    var k = th.k || 1, S = lastBal, i;
+    if (th.bg) { ctx.fillStyle = th.bg; ctx.fillRect(0, 0, W, H); } else ctx.clearRect(0, 0, W, H);
+    ctx.font = (12 * k) + 'px "IBM Plex Mono", ui-monospace, monospace'; ctx.textBaseline = 'alphabetic';
+    if (!S) { ctx.fillStyle = th.muted; ctx.textAlign = 'left'; ctx.fillText('Select a window to see the stabilogram.', 12 * k, 24 * k); return; }
+    var L = 66 * k, R = 14 * k, T = (title ? 40 : 14) * k, B = 46 * k;
+    var size = Math.min(W - L - R, H - T - B), x0 = L + (W - L - R - size) / 2, y0 = T;
+    var lim = Math.max(S.maxAbs, showEll ? S.ex : 0, showEll ? S.ey : 0) * 1.12 || 1;
+    function tx(u) { return x0 + (u + lim) / (2 * lim) * size; }
+    function ty(v) { return y0 + (lim - v) / (2 * lim) * size; }
+    var tk = niceTicks(-lim, lim, 6), dec = tk.step >= 1 ? 0 : Math.min(4, Math.ceil(-Math.log10(tk.step) - 1e-9));
+    ctx.lineWidth = 1 * k; ctx.fillStyle = th.muted; ctx.textAlign = 'center';
+    tk.ticks.forEach(function (t) {
+      var zero = Math.abs(t) < tk.step * 1e-6;
+      ctx.strokeStyle = zero ? th.muted : th.grid;
+      ctx.beginPath(); ctx.moveTo(tx(t), y0); ctx.lineTo(tx(t), y0 + size); ctx.moveTo(x0, ty(t)); ctx.lineTo(x0 + size, ty(t)); ctx.stroke();
+      ctx.textAlign = 'center'; ctx.fillText(t.toFixed(dec), tx(t), y0 + size + 16 * k);
+      ctx.textAlign = 'right'; ctx.fillText(t.toFixed(dec), x0 - 6 * k, ty(t) + 4 * k);
+    });
+    ctx.strokeStyle = th.muted; ctx.strokeRect(x0, y0, size, size);
+    ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, size, size); ctx.clip();
+    var nb = Math.min(60, S.n - 1), per = (S.n - 1) / nb, b, j;
+    ctx.lineWidth = 1.4 * k; ctx.lineJoin = 'round';
+    for (b = 0; b < nb; b++) {
+      var a0 = Math.floor(b * per), a1 = Math.min(S.n - 1, Math.floor((b + 1) * per));
+      ctx.strokeStyle = mixc(th.c0, th.c1, b / Math.max(1, nb - 1));
+      ctx.beginPath(); ctx.moveTo(tx(S.u[a0]), ty(S.v[a0]));
+      for (j = a0 + 1; j <= a1; j++) ctx.lineTo(tx(S.u[j]), ty(S.v[j]));
+      ctx.stroke();
+    }
+    if (showEll && S.B >= 0) {
+      ctx.strokeStyle = th.ell; ctx.lineWidth = 2.2 * k; ctx.setLineDash([8 * k, 5 * k]); ctx.beginPath();
+      var ct = Math.cos(S.th), st = Math.sin(S.th);
+      for (i = 0; i <= 120; i++) {
+        var ph = i / 120 * 2 * Math.PI, ex = S.A * Math.cos(ph), ey = S.B * Math.sin(ph);
+        var px = tx(ex * ct - ey * st), py = ty(ex * st + ey * ct);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.lineWidth = 2 * k;
+    ctx.strokeStyle = th.ink; ctx.fillStyle = th.bg || th.surface || '#fff';
+    ctx.beginPath(); ctx.arc(tx(S.u[0]), ty(S.v[0]), 5.5 * k, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = th.ink; ctx.fillRect(tx(S.u[S.n - 1]) - 5 * k, ty(S.v[S.n - 1]) - 5 * k, 10 * k, 10 * k);
+    ctx.restore();
+    ctx.fillStyle = th.ink; ctx.textAlign = 'left';
+    ctx.fillText('○ start   ■ end' + (showEll ? '   - - 95% CI' : ''), x0 + 8 * k, y0 + 16 * k);
+    var nm = { x: 'X', y: 'Y', z: 'Z', r: 'Resultant' };
+    ctx.fillStyle = th.muted; ctx.textAlign = 'center';
+    ctx.fillText('Side to side, ' + nm[S.ax[0]] + ' (m/s²)', x0 + size / 2, y0 + size + 36 * k);
+    ctx.save(); ctx.translate(14 * k, y0 + size / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Front to back, ' + nm[S.ax[1]] + ' (m/s²)', 0, 0); ctx.restore();
+    if (title) { ctx.fillStyle = th.ink; ctx.font = 'bold ' + (16 * k) + 'px "IBM Plex Sans", "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.fillText(title, W / 2, 26 * k); }
+  }
+  function balTheme() {
+    var d = isDark();
+    return { bg: null, surface: css('--surface'), ink: css('--ink'), muted: css('--muted'), grid: css('--grid'), ell: css('--cur'),
+      c0: d ? [40, 110, 120] : [150, 205, 212], c1: d ? [160, 235, 245] : [6, 60, 70], k: 1 };
+  }
+  function drawBal() {
+    var cv = $('chart-b'), wrap = $('stab-wrap'), dpr = window.devicePixelRatio || 1, W = wrap.clientWidth, H = wrap.clientHeight;
+    if (!W || !H) return;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    var ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawStab(ctx, W, H, balTheme(), '', $('bal-ell').checked);
+  }
+  function renderBalance() {
+    var w = win();
+    lastBal = null;
+    ['bal-path', 'bal-vel', 'bal-area'].forEach(function (id) { $(id).textContent = '–'; });
+    if (!w || w.n < 5) { drawBal(); return; }
+    var ax = [$('bal-ml').value, $('bal-ap').value], S = balCompute(w, ax[0], ax[1]), nm = { x: 'X', y: 'Y', z: 'Z', r: 'Resultant' };
+    S.ax = ax; S.label = 'Side to side = ' + nm[ax[0]] + ', front to back = ' + nm[ax[1]]; S.t0 = D.t[w.lo]; S.t1 = D.t[w.hi];
+    lastBal = S;
+    $('bal-path').textContent = fmt(S.path, 2); $('bal-vel').textContent = fmt(S.path / S.dur, 3); $('bal-area').textContent = fmt(S.area, 4);
+    drawBal();
+  }
+
+  /* ---- shared helpers ---- */
+  function autoBase(key) {
+    var lim = Math.min(1, 0.15 * D.t[D.n - 1]), s = 0, c = 0;
+    for (var i = 0; i < D.n && D.t[i] <= lim; i++) { s += D[key][i]; c++; }
+    return c ? s / c : 0;
+  }
+  /* Small line graph. opt: xlabel, markers [{x, label, color}], x1 (fixed right edge). The y range always includes 0. */
+  function miniPlot(cv, xs, ys, color, unit, opt) {
+    opt = opt || {};
+    var wrap = cv.parentElement, dpr = window.devicePixelRatio || 1, W = wrap.clientWidth, H = wrap.clientHeight;
+    if (!W || !H) return;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    var ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    var muted = css('--muted'), grid = css('--grid');
+    ctx.font = '12px "IBM Plex Mono", ui-monospace, monospace';
+    if (!xs || xs.length < 2) { ctx.fillStyle = muted; ctx.fillText(opt.empty || 'Select a window to see the graph.', 12, 24); return; }
+    var L = 54, R = 14, T = 24, B2 = 34, pw = W - L - R, ph = H - T - B2;
+    var x0 = xs[0], x1 = opt.x1 !== undefined ? opt.x1 : xs[xs.length - 1], mn = 0, mx = 0, i;
+    for (i = 0; i < ys.length; i++) { if (ys[i] < mn) mn = ys[i]; if (ys[i] > mx) mx = ys[i]; }
+    if (mx - mn < 1e-6) { mn -= 1; mx += 1; }
+    var pad = (mx - mn) * 0.08; mn -= pad; mx += pad;
+    function tx(t) { return L + (t - x0) / ((x1 - x0) || 1) * pw; }
+    function ty(v) { return T + (mx - v) / (mx - mn) * ph; }
+    ctx.lineWidth = 1; ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+    niceTicks(mn, mx, Math.max(3, Math.floor(ph / 40))).ticks.forEach(function (v) {
+      var y = Math.round(ty(v)) + 0.5;
+      ctx.strokeStyle = Math.abs(v) < 1e-9 ? muted : grid; ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke();
+      ctx.fillStyle = muted; ctx.fillText(+v.toPrecision(3) + '', L - 6, y);
+    });
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    niceTicks(x0, x1, Math.max(3, Math.floor(pw / 90))).ticks.forEach(function (v) {
+      var x = Math.round(tx(v)) + 0.5;
+      ctx.strokeStyle = grid; ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, T + ph); ctx.stroke();
+      ctx.fillStyle = muted; ctx.fillText(+v.toFixed(3) + '', x, T + ph + 6);
+    });
+    ctx.save();
+    ctx.translate(12, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = muted; ctx.fillText(unit, 0, 0);
+    ctx.restore();
+    if (opt.xlabel) { ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillStyle = muted; ctx.fillText(opt.xlabel, L + pw, H - 1); }
+    ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip();
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.beginPath();
+    for (i = 0; i < xs.length; i++) { var X = tx(xs[i]), Y = ty(ys[i]); if (i) ctx.lineTo(X, Y); else ctx.moveTo(X, Y); }
+    ctx.stroke(); ctx.restore();
+    ctx.strokeStyle = muted; ctx.strokeRect(L + 0.5, T + 0.5, pw, ph);
+    (opt.markers || []).forEach(function (m, k) {
+      var x = tx(m.x); if (!(x >= L && x <= L + pw)) return;
+      ctx.strokeStyle = m.color; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, T + ph); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = m.color; ctx.textBaseline = 'bottom'; ctx.textAlign = x > L + pw - 110 ? 'right' : 'left';
+      ctx.fillText(m.label, x + (ctx.textAlign === 'right' ? -4 : 4), T - 2 - (k % 2) * 0);
+    });
+  }
+
+  /* ---- area under the curve and rate of change ---- */
+  function calcMode() { var el = document.querySelector('input[name="calc"]:checked'); return el ? el.value : 'auc'; }
+  function calcArrays(w, key, off) {
+    var a = D[key], t = D.t, n = w.n, tt = new Array(n), v = new Array(n), area = new Array(n), rate = new Array(n), net = 0, tot = 0, i, k;
+    for (i = 0; i < n; i++) { k = w.lo + i; tt[i] = t[k] - t[w.lo]; v[i] = a[k] - off; }
+    area[0] = 0;
+    for (i = 1; i < n; i++) {
+      var dt = tt[i] - tt[i - 1];
+      net += (v[i - 1] + v[i]) / 2 * dt; tot += (Math.abs(v[i - 1]) + Math.abs(v[i])) / 2 * dt;
+      area[i] = net;
+    }
+    for (i = 0; i < n; i++) {
+      var k0 = Math.max(0, w.lo + i - 1), k1 = Math.min(D.n - 1, w.lo + i + 1);
+      rate[i] = k1 > k0 ? (a[k1] - a[k0]) / (t[k1] - t[k0]) : 0;
+    }
+    return { t: tt, v: v, area: area, rate: rate, net: net, total: tot };
+  }
+  function renderCalc() {
+    var cvc = $('chart-c'), box = $('calc-box');
+    box.innerHTML = '';
+    function addBox(label, value) { var d = document.createElement('div'), a = document.createElement('span'), b = document.createElement('span'); a.className = 'fl'; a.textContent = label; b.className = 'fv'; b.textContent = value; d.appendChild(a); d.appendChild(b); box.appendChild(d); }
+    lastCalc = null;
+    var w = win();
+    if (!w) { miniPlot(cvc, null, null, '', ''); return; }
+    var key = $('calc-sig').value;
+    if (calcAuto) $('calc-off').value = autoBase(key).toFixed(2);
+    var off = numVal('calc-off', 0), c = calcArrays(w, key, off), mode = calcMode(), i;
+    lastCalc = { mode: mode, key: key, off: off, net: c.net, total: c.total };
+    if (mode === 'auc') {
+      addBox('Net area (m/s)', fmt(c.net, 3)); addBox('Total area, all positive (m/s)', fmt(c.total, 3));
+      miniPlot(cvc, c.t, c.area, css('--sz'), 'running area (m/s)', { xlabel: 'time in window (s)' });
+    } else {
+      var rmx = -Infinity, rmn = Infinity, tmx = 0, tmn = 0, sa = 0;
+      for (i = 0; i < c.rate.length; i++) { if (c.rate[i] > rmx) { rmx = c.rate[i]; tmx = c.t[i]; } if (c.rate[i] < rmn) { rmn = c.rate[i]; tmn = c.t[i]; } sa += Math.abs(c.rate[i]); }
+      lastCalc.rmax = rmx; lastCalc.rmin = rmn; lastCalc.rabs = sa / c.rate.length;
+      addBox('Highest rate (m/s³)', fmt(rmx, 1)); addBox('Lowest rate (m/s³)', fmt(rmn, 1)); addBox('Average size (m/s³)', fmt(lastCalc.rabs, 1));
+      miniPlot(cvc, c.t, c.rate, css('--sz'), 'rate of change (m/s³)', { xlabel: 'time in window (s)' });
+    }
+  }
+
+  /* ---- frequency: FFT ---- */
+  function nextPow2(n) { var m = 1; while (m < n) m <<= 1; return m; }
+  function fftInPlace(re, im) {
+    var n = re.length, i, j = 0, k, m, t;
+    for (i = 1; i < n; i++) {
+      var bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) { t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+    }
+    for (var len = 2; len <= n; len <<= 1) {
+      var ang = -2 * Math.PI / len, wr = Math.cos(ang), wi = Math.sin(ang), half = len >> 1;
+      for (i = 0; i < n; i += len) {
+        var cr = 1, ci = 0;
+        for (k = 0; k < half; k++) {
+          var a = i + k, b = a + half;
+          var xr = re[b] * cr - im[b] * ci, xi = re[b] * ci + im[b] * cr;
+          re[b] = re[a] - xr; im[b] = im[a] - xi; re[a] += xr; im[a] += xi;
+          m = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = m;
+        }
+      }
+    }
+  }
+  function computeFft(w, key) {
+    var n = w.n, dur = D.t[w.hi] - D.t[w.lo];
+    if (n < 16 || !(dur > 0)) return { err: 'Choose a longer window (at least 16 samples) to see the frequencies.' };
+    var fs = (n - 1) / dur, a = D[key], t = D.t, u = new Float64Array(n), j = w.lo, mean = 0, i;
+    for (i = 0; i < n; i++) {
+      var tt = t[w.lo] + i / fs;
+      while (j < w.hi - 1 && t[j + 1] < tt) j++;
+      var f0 = t[j], f1 = t[j + 1], fr = f1 > f0 ? (tt - f0) / (f1 - f0) : 0;
+      fr = fr < 0 ? 0 : fr > 1 ? 1 : fr;
+      u[i] = a[j] + fr * (a[j + 1] - a[j]); mean += u[i];
+    }
+    mean /= n;
+    var M = Math.max(nextPow2(n), Math.min(Math.max(1024, nextPow2(n * 4)), 262144));
+    var re = new Float64Array(M), im = new Float64Array(M), sw = 0;
+    for (i = 0; i < n; i++) { var hw = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (n - 1)); re[i] = (u[i] - mean) * hw; sw += hw; }
+    fftInPlace(re, im);
+    var K = M >> 1, df = fs / M, fq = new Float64Array(K + 1), amp = new Float64Array(K + 1), pwr = new Float64Array(K + 1), tot = 0, k;
+    for (k = 0; k <= K; k++) { fq[k] = k * df; amp[k] = 2 * Math.sqrt(re[k] * re[k] + im[k] * im[k]) / sw; pwr[k] = amp[k] * amp[k]; if (k >= 1) tot += pwr[k]; }
+    var kp = 1;
+    for (k = 2; k < K; k++) if (amp[k] > amp[kp]) kp = k;
+    var fpk = fq[kp], apk = amp[kp];
+    if (kp > 1 && kp < K) {
+      var A = amp[kp - 1], B = amp[kp], C = amp[kp + 1], den = A - 2 * B + C;
+      if (den < 0) { var dl = 0.5 * (A - C) / den; fpk = (kp + dl) * df; apk = B - 0.25 * (A - C) * dl; }
+    }
+    var fmed = NaN, cum = 0, half = tot / 2;
+    if (tot > 0) {
+      for (k = 1; k <= K; k++) {
+        if (cum + pwr[k] >= half) { fmed = (k - 0.5 + (pwr[k] > 0 ? (half - cum) / pwr[k] : 0)) * df; break; }
+        cum += pwr[k];
+      }
+    }
+    return { key: key, n: n, fs: fs, dur: dur, nyq: fs / 2, res: 1 / dur, f: fq, amp: amp, fpk: fpk, apk: apk, fmed: fmed };
+  }
+  function renderFft() {
+    var sum = $('fft-summary'), cvf = $('chart-f');
+    lastFft = null; $('fft-peak').textContent = '–'; $('fft-med').textContent = '–';
+    var w = win();
+    if (!w) { sum.textContent = D ? 'Select a window with at least two samples.' : ''; miniPlot(cvf, null, null, '', ''); return; }
+    var key = $('fft-sig').value, r = computeFft(w, key);
+    lastFft = r; sum.textContent = '';
+    if (r.err) { sum.textContent = r.err; miniPlot(cvf, null, null, '', '', { empty: r.err }); return; }
+    var fmax = numVal('fft-max', 0); fmax = fmax > 0 ? Math.min(fmax, r.nyq) : Math.min(r.nyq, 25);
+    var xs = [], ys = [];
+    for (var k = 0; k < r.f.length && r.f[k] <= fmax; k++) { xs.push(r.f[k]); ys.push(r.amp[k]); }
+    $('fft-peak').textContent = fmt(r.fpk, 2) + ' Hz'; $('fft-med').textContent = isFinite(r.fmed) ? fmt(r.fmed, 2) + ' Hz' : '–';
+    sum.textContent = '';
+    var markers = [{ x: r.fpk, label: 'peak ' + fmt(r.fpk, 2) + ' Hz', color: css('--sx') }];
+    if (isFinite(r.fmed)) markers.push({ x: r.fmed, label: 'median ' + fmt(r.fmed, 2) + ' Hz', color: css('--cur') });
+    if (isFinite(r.fmed) && Math.abs(r.fmed - r.fpk) < fmax * 0.22) markers[0].label = '';
+    miniPlot(cvf, xs, ys, css('--sz'), 'size (m/s²)', { xlabel: 'frequency (Hz)', markers: markers, x1: fmax });
+  }
+
+  /* ---- overlay repetitions ---- */
+  var PAL = ['#2b8cbe', '#e6550d', '#31a354', '#c51b8a', '#d4a017', '#756bb1', '#17a2b8', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#ff7f0e'];
+  function ovPct() { var el = document.querySelector('input[name="ovx"]:checked'); return !!el && el.value === 'pct'; }
+  function renderOvList() {
+    var box = $('ov-list'); box.innerHTML = '';
+    REPS.forEach(function (r, idx) {
+      var row = document.createElement('div'); row.className = 'ovrow';
+      var sw = document.createElement('span'); sw.className = 'sw'; sw.style.setProperty('--c', PAL[r.ci]); row.appendChild(sw);
+      var inp = document.createElement('input'); inp.type = 'text'; inp.value = r.label; inp.maxLength = 30; inp.setAttribute('aria-label', 'Label for repetition ' + (idx + 1));
+      inp.addEventListener('input', function () { r.label = inp.value; drawOv(); });
+      row.appendChild(inp);
+      var meta = document.createElement('span'); meta.className = 'meta'; meta.textContent = r.file + ' · ' + NAMES[r.key] + ' · ' + r.dur.toFixed(2) + ' s'; row.appendChild(meta);
+      var rm = document.createElement('button'); rm.type = 'button'; rm.textContent = 'Remove'; rm.addEventListener('click', function () { REPS.splice(idx, 1); renderOvList(); drawOv(); }); row.appendChild(rm);
+      box.appendChild(row);
+    });
+  }
+  function addRep() {
+    var w = win();
+    if (!w) { toast('Select a window with at least two samples first.'); return; }
+    if (REPS.length >= PAL.length) { toast('You can overlay up to ' + PAL.length + ' repetitions. Remove one first.'); return; }
+    var key = $('ov-sig').value, a = D[key], om = $('ov-off').value, off = 0, i;
+    if (om === 'g') off = G; else if (om === 'mean') { var s = 0; for (i = w.lo; i <= w.hi; i++) s += a[i]; off = s / w.n; }
+    var t = [], v = [], pk = -Infinity, pkT = 0;
+    for (i = w.lo; i <= w.hi; i++) { var vv = a[i] - off, tt = D.t[i] - D.t[w.lo]; t.push(tt); v.push(vv); if (vv > pk) { pk = vv; pkT = tt; } }
+    var used = {}; REPS.forEach(function (r) { used[r.ci] = true; });
+    var ci = 0; while (used[ci]) ci++;
+    REPS.push({ label: $('ov-label').value.trim() || ('Rep ' + (REPS.length + 1)), file: fileName, key: key, off: off, t: t, v: v, dur: t[t.length - 1], peakT: pkT, ci: ci });
+    $('ov-label').value = '';
+    renderOvList(); drawOv();
+    toast('Added. ' + REPS.length + ' repetition' + (REPS.length === 1 ? '' : 's') + ' on the graph.');
+  }
+  function ovSeries() {
+    var pct = ovPct(), al = $('ov-align').value;
+    return REPS.map(function (r) {
+      var sh = pct ? 0 : (al === 'peak' ? r.peakT : 0);
+      var x = r.t.map(function (tt) { return pct ? (r.dur > 0 ? tt / r.dur * 100 : 0) : tt - sh; });
+      return { r: r, x: x, y: r.v };
+    });
+  }
+  function interp(xs, ys, x) {
+    var lo = 0, hi = xs.length - 1;
+    if (x <= xs[0]) return ys[0]; if (x >= xs[hi]) return ys[hi];
+    while (hi - lo > 1) { var m = (lo + hi) >> 1; if (xs[m] <= x) lo = m; else hi = m; }
+    var f = (x - xs[lo]) / ((xs[hi] - xs[lo]) || 1); return ys[lo] + f * (ys[hi] - ys[lo]);
+  }
+  function ovAverage(S) {
+    if (S.length < 2) return null;
+    var lo = -Infinity, hi = Infinity;
+    S.forEach(function (s) { lo = Math.max(lo, s.x[0]); hi = Math.min(hi, s.x[s.x.length - 1]); });
+    if (!(hi > lo)) return null;
+    var G2 = 200, xs = [], m = [], sd = [];
+    for (var g = 0; g <= G2; g++) {
+      var x = lo + (hi - lo) * g / G2, vals = S.map(function (s) { return interp(s.x, s.y, x); }), mu = 0, v2 = 0;
+      vals.forEach(function (v) { mu += v; }); mu /= vals.length;
+      vals.forEach(function (v) { v2 += (v - mu) * (v - mu); });
+      xs.push(x); m.push(mu); sd.push(Math.sqrt(v2 / (vals.length - 1)));
+    }
+    return { x: xs, m: m, sd: sd };
+  }
+  function drawOvOn(ctx, W, H, th, title) {
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = '12px "IBM Plex Mono", ui-monospace, monospace';
+    var S = ovSeries(), pct = ovPct(), showAvg = $('ov-avg').checked, avg = showAvg ? ovAverage(S) : null;
+    if (th.bg) { ctx.fillStyle = th.bg; ctx.fillRect(0, 0, W, H); }
+    if (!S.length) { ctx.fillStyle = th.muted; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left'; ctx.fillText('Select a repetition in the graph above, then press Add current window.', 16, 28); return; }
+    var L = 54, R = 14, B = 36, T = 10;
+    if (title) { ctx.fillStyle = th.ink; ctx.font = '600 15px "IBM Plex Sans", "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(title, W / 2, 8); T = 32; ctx.font = '12px "IBM Plex Mono", ui-monospace, monospace'; }
+    var entries = S.map(function (s) { return { c: PAL[s.r.ci], t: s.r.label || ('Rep ' + (S.indexOf(s) + 1)) }; });
+    if (avg) entries.push({ c: th.ink, t: 'Average ± 1 SD' });
+    var lx = L, ly = T, rowH = 18;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    entries.forEach(function (e) {
+      var wd = ctx.measureText(e.t).width + 28;
+      if (lx + wd > W - R && lx > L) { lx = L; ly += rowH; }
+      ctx.fillStyle = e.c; ctx.beginPath(); ctx.arc(lx + 5, ly + 8, 5, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillStyle = th.ink; ctx.fillText(e.t, lx + 15, ly + 9);
+      lx += wd;
+    });
+    T = ly + rowH + 8;
+    var pw = W - L - R, ph = H - T - B;
+    var x0 = Infinity, x1 = -Infinity, ymn = 0, ymx = 0;
+    S.forEach(function (s) { x0 = Math.min(x0, s.x[0]); x1 = Math.max(x1, s.x[s.x.length - 1]); s.y.forEach(function (v) { if (v < ymn) ymn = v; if (v > ymx) ymx = v; }); });
+    if (avg) avg.m.forEach(function (v, i) { var lo = v - avg.sd[i], hi = v + avg.sd[i]; if (lo < ymn) ymn = lo; if (hi > ymx) ymx = hi; });
+    if (ymx - ymn < 1e-6) { ymn -= 1; ymx += 1; }
+    var pad = (ymx - ymn) * 0.06; ymn -= pad; ymx += pad;
+    if (!(x1 > x0)) x1 = x0 + 1;
+    function tx(t) { return L + (t - x0) / (x1 - x0) * pw; }
+    function ty(v) { return T + (ymx - v) / (ymx - ymn) * ph; }
+    ctx.lineWidth = 1; ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+    niceTicks(ymn, ymx, Math.max(3, Math.floor(ph / 44))).ticks.forEach(function (v) {
+      var y = Math.round(ty(v)) + 0.5;
+      ctx.strokeStyle = Math.abs(v) < 1e-9 ? th.muted : th.grid; ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke();
+      ctx.fillStyle = th.muted; ctx.fillText(+v.toPrecision(3) + '', L - 6, y);
+    });
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    niceTicks(x0, x1, Math.max(3, Math.floor(pw / 90))).ticks.forEach(function (v) {
+      var x = Math.round(tx(v)) + 0.5;
+      ctx.strokeStyle = th.grid; ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, T + ph); ctx.stroke();
+      ctx.fillStyle = th.muted; ctx.fillText(+v.toFixed(3) + '', x, T + ph + 6);
+    });
+    ctx.save(); ctx.translate(12, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = th.muted; ctx.fillText('acceleration (m/s²)', 0, 0); ctx.restore();
+    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillStyle = th.muted; ctx.fillText(pct ? 'time normalized (% of movement)' : 'time (s)', L + pw, H - 2);
+    ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip(); ctx.lineJoin = 'round';
+    if (avg) {
+      ctx.fillStyle = th.band; ctx.beginPath();
+      avg.x.forEach(function (x, i) { var X = tx(x), Y = ty(avg.m[i] + avg.sd[i]); if (i) ctx.lineTo(X, Y); else ctx.moveTo(X, Y); });
+      for (var q = avg.x.length - 1; q >= 0; q--) ctx.lineTo(tx(avg.x[q]), ty(avg.m[q] - avg.sd[q]));
+      ctx.closePath(); ctx.fill();
+    }
+    S.forEach(function (s) {
+      ctx.strokeStyle = PAL[s.r.ci]; ctx.lineWidth = 1.8; ctx.beginPath();
+      s.x.forEach(function (x, i) { var X = tx(x), Y = ty(s.y[i]); if (i) ctx.lineTo(X, Y); else ctx.moveTo(X, Y); });
+      ctx.stroke();
+    });
+    if (avg) {
+      ctx.strokeStyle = th.ink; ctx.lineWidth = 3; ctx.beginPath();
+      avg.x.forEach(function (x, i) { var X = tx(x), Y = ty(avg.m[i]); if (i) ctx.lineTo(X, Y); else ctx.moveTo(X, Y); });
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.strokeStyle = th.muted; ctx.lineWidth = 1; ctx.strokeRect(L + 0.5, T + 0.5, pw, ph);
+  }
+  function themeNow() { return { ink: css('--ink'), muted: css('--muted'), grid: css('--grid'), band: 'rgba(128,128,128,0.22)' }; }
+  function drawOv() {
+    $('ov-align-f').style.display = ovPct() ? 'none' : '';
+    var cv = $('chart-o'), wrap = cv.parentElement, dpr = window.devicePixelRatio || 1, W = wrap.clientWidth, H = wrap.clientHeight;
+    if (!W || !H) return;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    var ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawOvOn(ctx, W, H, themeNow(), $('ov-title').value.trim());
+  }
+  function download(name, data, type) {
+    var blob = data instanceof Blob ? data : new Blob([data], { type: type || 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+  }
+  function baseName() { return (fileName || 'data').replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_\-]+/g, '_'); }
+  function csvCell(v, sep) { v = typeof v === 'number' ? (isFinite(v) ? String(+v.toFixed(5)) : '') : String(v === undefined || v === null ? '' : v); return /[",\n\t]/.test(v) && sep === ',' ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function toTable(rows2, sep) { return rows2.map(function (r) { return r.map(function (v) { return csvCell(v, sep); }).join(sep); }).join('\n'); }
+  function ovCsv() {
+    var S = ovSeries(); if (!S.length) return null;
+    var pct = ovPct(), x0 = Infinity, x1 = -Infinity, avg = $('ov-avg').checked ? ovAverage(S) : null;
+    S.forEach(function (s) { x0 = Math.min(x0, s.x[0]); x1 = Math.max(x1, s.x[s.x.length - 1]); });
+    var n = pct ? 101 : 201, head = [pct ? 'Time normalized (% of movement)' : 'Time (s)'], rows2 = [], g, i;
+    S.forEach(function (s, i2) { head.push((s.r.label || ('Rep ' + (i2 + 1))) + ' (m/s2)'); });
+    if (avg) { head.push('Average (m/s2)', 'SD (m/s2)'); }
+    rows2.push(head);
+    for (g = 0; g < n; g++) {
+      var x = x0 + (x1 - x0) * g / (n - 1), row = [x];
+      S.forEach(function (s) { row.push(x >= s.x[0] - 1e-9 && x <= s.x[s.x.length - 1] + 1e-9 ? interp(s.x, s.y, x) : ''); });
+      if (avg) { if (x >= avg.x[0] - 1e-9 && x <= avg.x[avg.x.length - 1] + 1e-9) { row.push(interp(avg.x, avg.m, x), interp(avg.x, avg.sd, x)); } else row.push('', ''); }
+      rows2.push(row);
+    }
+    return rows2;
+  }
+
+  /* ---- export ---- */
+  function resultsRows() {
+    var S = stats(); if (!S) return null;
+    var R = [['File', fileName], ['Window start (s)', S.t0.toFixed(3)], ['Window end (s)', S.t1.toFixed(3)], ['Samples', S.n], ['Filter', filterLabel()], [],
+      ['TIME DOMAIN'], ['Axis', 'Min (m/s2)', 'Max (m/s2)', 'Mean (m/s2)', 'RMS (m/s2)', 'Std dev (m/s2)']];
+    KEYS.forEach(function (k) { var o = S.out[k]; R.push([NAMES[k], +o.min.toFixed(4), +o.max.toFixed(4), +o.mean.toFixed(4), +o.rms.toFixed(4), +o.sd.toFixed(4)]); });
+    if (lastCalc) {
+      R.push([], ['CALCULATION (section 5)'], ['Line', NAMES[lastCalc.key]], ['Offset removed (m/s2)', lastCalc.off]);
+      if (lastCalc.mode === 'auc') R.push(['Net area under the curve (m/s)', +lastCalc.net.toFixed(4)], ['Total area, all positive (m/s)', +lastCalc.total.toFixed(4)]);
+      else R.push(['Highest rate of change (m/s3)', +lastCalc.rmax.toFixed(3)], ['Lowest rate of change (m/s3)', +lastCalc.rmin.toFixed(3)], ['Average size of rate of change (m/s3)', +lastCalc.rabs.toFixed(3)]);
+    }
+    if (lastFft && !lastFft.err) R.push([], ['FREQUENCY (section 6)'], ['Line', NAMES[lastFft.key]], ['Peak frequency (Hz)', +lastFft.fpk.toFixed(3)], ['Median frequency (Hz)', isFinite(lastFft.fmed) ? +lastFft.fmed.toFixed(3) : ''], ['Frequency detail (Hz)', +lastFft.res.toFixed(3)], ['Sampling rate (Hz)', +lastFft.fs.toFixed(1)]);
+    if (lastBal) {
+      R.push([], ['BALANCE (section 7)'], ['Horizontal axes', lastBal.label], ['Window time (s)', +lastBal.dur.toFixed(3)]);
+      balRows(lastBal).forEach(function (r) { R.push([r[0] + ' (' + r[2].replace(/²/g, '2').replace(/³/g, '3') + ')', +(+r[1]).toFixed(r[3] + 1)]); });
+    }
+    return R;
+  }
+  function windowRows() {
+    var S = stats(); if (!S) return null;
+    var off = $('zero-t').checked ? S.t0 : 0, w = win(), c = null, head = ['Time (s)', 'X (m/s2)', 'Y (m/s2)', 'Z (m/s2)', 'Resultant (m/s2)'];
+    if (lastCalc && w) { c = calcArrays(w, lastCalc.key, lastCalc.off); head.push(NAMES[lastCalc.key] + ' minus offset (m/s2)', 'Running area (m/s)', 'Rate of change (m/s3)'); }
+    var R = [head];
+    for (var i = S.lo; i <= S.hi; i++) {
+      var row = [+(D.t[i] - off).toFixed(4), +D.x[i].toFixed(4), +D.y[i].toFixed(4), +D.z[i].toFixed(4), +D.r[i].toFixed(4)];
+      if (c) row.push(+c.v[i - S.lo].toFixed(4), +c.area[i - S.lo].toFixed(5), +c.rate[i - S.lo].toFixed(3));
+      R.push(row);
+    }
+    return R;
+  }
+  $('btn-dl-res').addEventListener('click', function () { var R = resultsRows(); if (!R) { toast('Choose a window with at least two samples first.'); return; } download(baseName() + '_results.csv', toTable(R, ',')); });
+  $('btn-dl-data').addEventListener('click', function () { var R = windowRows(); if (!R) { toast('Choose a window with at least two samples first.'); return; } download(baseName() + '_window.csv', toTable(R, ',')); });
+  $('btn-copy-res').addEventListener('click', function () { var R = resultsRows(); if (!R) { toast('Choose a window with at least two samples first.'); return; } copyText(toTable(R, '\t'), 'Results table'); });
+  $('btn-copy-data').addEventListener('click', function () { var R = windowRows(); if (!R) { toast('Choose a window with at least two samples first.'); return; } copyText(toTable(R, '\t'), 'Window data (' + (R.length - 1) + ' rows' + (filt.mode !== 'none' ? ', filtered' : '') + ')'); });
+  $('btn-dl-png').addEventListener('click', function () {
+    if (!D) { toast('Load a file first.'); return; }
+    var h = hoverT; hoverT = null; draw();
+    var c = $('chart'), o = document.createElement('canvas'); o.width = c.width; o.height = c.height;
+    var cx = o.getContext('2d'); cx.fillStyle = css('--surface'); cx.fillRect(0, 0, o.width, o.height); cx.drawImage(c, 0, 0);
+    hoverT = h; draw();
+    o.toBlob(function (b) { download(baseName() + '_graph.png', b); });
+  });
+  $('btn-ov-png').addEventListener('click', function () {
+    if (!REPS.length) { toast('Add a repetition first.'); return; }
+    var o = document.createElement('canvas'); o.width = 1200; o.height = 720;
+    var title = $('ov-title').value.trim();
+    drawOvOn(o.getContext('2d'), 1200, 720, { ink: '#14202b', muted: '#5b6b78', grid: '#e3e8ec', band: 'rgba(20,32,43,0.14)', bg: '#ffffff' }, title);
+    o.toBlob(function (b) { download((title ? title.replace(/[^A-Za-z0-9_\-]+/g, '_') : 'overlay') + '.png', b); });
+  });
+  $('btn-ov-csv').addEventListener('click', function () { var R = ovCsv(); if (!R) { toast('Add a repetition first.'); return; } download('overlay_data.csv', toTable(R, ',')); });
+
+  /* Simulated trial of 5 vertical jumps that differ in timing, size and noise. Fixed seed, so everyone sees the same jumps.
+     Each jump is consistent: the velocity gained before take-off equals g x (flight time) / 2. */
+  function exampleJumps() {
+    var seed = 11;
+    function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    function between(a, b) { return a + (b - a) * rnd(); }
+    var hz = 100, total = 22, jumps = [], wins = [], k;
+    for (k = 0; k < 5; k++) {
+      var s0 = 1.2 + k * 4.0 + between(-0.2, 0.2), d1 = between(0.25, 0.36), d2 = between(0.24, 0.33), a1 = between(3.5, 5.5), tf = between(0.42, 0.58);
+      var a2 = (G * tf / 2 + a1 * d1 * 2 / Math.PI) * Math.PI / (2 * d2);
+      var landA = between(26, 38), ring = between(4, 7), sway = between(0.8, 1.6), ph = between(0, 6.28);
+      jumps.push({ s0: s0, d1: d1, d2: d2, a1: a1, a2: a2, tf: tf, landA: landA, ring: ring, sway: sway, ph: ph });
+      wins.push([Math.max(0, s0 - 0.3), s0 + d1 + d2 + tf + 0.1 + 0.8]);
+    }
+    var out = ['Time(s),AccX(m/s²),AccY(m/s²),AccZ(m/s²)'];
+    for (var i = 0; i < total * hz; i++) {
+      var t = i / hz, net = 0, sw = 0;
+      jumps.forEach(function (j) {
+        var u = t - j.s0, tk = j.d1 + j.d2, tl = tk + j.tf;
+        if (u >= 0 && u < j.d1) net += -j.a1 * Math.sin(Math.PI * u / j.d1);
+        else if (u >= j.d1 && u < tk) net += j.a2 * Math.sin(Math.PI * (u - j.d1) / j.d2);
+        else if (u >= tk && u < tl) net += -G;
+        else if (u >= tl && u < tl + 0.1) net += j.landA * Math.sin(Math.PI * (u - tl) / 0.1);
+        else if (u >= tl + 0.1 && u < tl + 0.8) net += -j.ring * Math.exp(-(u - tl - 0.1) * 7) * Math.sin(2 * Math.PI * 3 * (u - tl - 0.1));
+        if (u >= 0 && u < tl + 0.8) sw += j.sway * Math.sin(2 * Math.PI * 1.4 * t + j.ph);
+      });
+      var xv = 0.35 + sw * 0.5 + (rnd() - 0.5) * 0.3, yv = -0.2 + sw * 0.35 + (rnd() - 0.5) * 0.3, zv = G + net + (rnd() - 0.5) * 0.35;
+      out.push([t.toFixed(2), xv.toFixed(3), yv.toFixed(3), zv.toFixed(3)].join(','));
+    }
+    return { csv: out.join('\n'), wins: wins };
+  }
+  $('btn-ov-example').addEventListener('click', function () {
+    var ex = exampleJumps();
+    loadText(ex.csv, 'Simulated: 5 vertical jumps', true);
+    if (!D) return;
+    REPS = []; $('ov-sig').value = 'z'; $('ov-off').value = 'g'; $('ov-avg').checked = true; $('ov-title').value = 'Five vertical jumps (simulated)';
+    ex.wins.forEach(function (w, i) {
+      sel = [w[0], w[1]]; renderInputs(); $('ov-label').value = 'Jump ' + (i + 1); addRep();
+    });
+    sel = [0, D.t[D.n - 1]]; renderAll(); renderOvList(); drawOv();
+    toast('Loaded 5 simulated jumps and added each one to the overlay.');
+  });
+  $('btn-ov-add').addEventListener('click', addRep);
+  $('btn-ov-undo').addEventListener('click', function () { REPS.pop(); renderOvList(); drawOv(); });
+  $('btn-ov-clear').addEventListener('click', function () { REPS = []; renderOvList(); drawOv(); });
+  ['ov-align', 'ov-avg'].forEach(function (id) { $(id).addEventListener('change', drawOv); });
+  $('ov-title').addEventListener('input', drawOv);
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="ovx"]'), function (el) { el.addEventListener('change', drawOv); });
+
+  /* ---- wiring ---- */
+  function renderAnalysis() { renderPeaks(); renderCalc(); renderFft(); renderBalance(); }
+  function reanalyze() { renderAnalysis(); draw(); }
+  function applyFilter() {
+    var v = $('smooth').value, fc = parseFloat($('fc').value);
+    filt.mode = v === 'none' ? 'none' : v; filt.sec = v === 'ma' ? 0.1 : 0;
+    if (!(fc > 0)) fc = v === 'hp' ? 0.5 : 5;
+    fc = Math.max(0.1, Math.round(fc * 10) / 10);
+    filt.fc = fc;
+    $('f-fc').hidden = !(v === 'lp' || v === 'hp');
+    if (RAW) { D = derive(RAW, filt); renderAll(); }
+  }
+  $('smooth').addEventListener('change', function () {
+    if ($('smooth').value === 'lp' && !$('fc').dataset.touched) $('fc').value = '5.0';
+    if ($('smooth').value === 'hp' && !$('fc').dataset.touched) $('fc').value = '0.5';
+    applyFilter();
+  });
+  $('fc').addEventListener('input', function () { $('fc').dataset.touched = '1'; applyFilter(); });
+  $('fc').addEventListener('change', function () { var f = parseFloat($('fc').value); if (f > 0) $('fc').value = Math.max(0.1, Math.round(f * 10) / 10).toFixed(1); applyFilter(); });
+  ['pk-sig', 'pk-mode'].forEach(function (id) { $(id).addEventListener('change', function () { pkAuto = true; reanalyze(); }); });
+  $('pk-thr').addEventListener('input', function () { pkAuto = false; });
+  ['pk-thr', 'pk-gap', 'pk-show'].forEach(function (id) { $(id).addEventListener(id === 'pk-show' ? 'change' : 'input', reanalyze); });
+  $('btn-pk-suggest').addEventListener('click', function () { pkAuto = true; reanalyze(); });
+  $('bal-ml').addEventListener('change', renderBalance);
+  $('bal-ap').addEventListener('change', renderBalance);
+  $('bal-ell').addEventListener('change', drawBal);
+  $('btn-bal-png').addEventListener('click', function () {
+    if (!lastBal) { toast('Select a window with at least five samples first.'); return; }
+    var o = document.createElement('canvas'); o.width = 1200; o.height = 1200;
+    var title = '';
+    drawStab(o.getContext('2d'), 1200, 1200, { bg: '#ffffff', surface: '#ffffff', ink: '#14202b', muted: '#5b6b78', grid: '#e3e8ec', ell: '#c26a12', c0: [150, 205, 212], c1: [6, 60, 70], k: 2 }, title, $('bal-ell').checked);
+    o.toBlob(function (b) { download((title ? title.replace(/[^A-Za-z0-9_\-]+/g, '_') : baseName() + '_stabilogram') + '.png', b); });
+  });
+  $('btn-example-bal').addEventListener('click', function () { loadText(exampleBalanceCSV(), 'Example balance trial (20 s)', true); });
+  $('calc-sig').addEventListener('change', function () { calcAuto = true; reanalyze(); });
+  $('calc-off').addEventListener('input', function () { calcAuto = false; reanalyze(); });
+  $('btn-calc-auto').addEventListener('click', function () { calcAuto = true; reanalyze(); });
+  $('btn-calc-g').addEventListener('click', function () { calcAuto = false; $('calc-off').value = '9.81'; reanalyze(); });
+  $('btn-calc-0').addEventListener('click', function () { calcAuto = false; $('calc-off').value = '0'; reanalyze(); });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="calc"]'), function (el) { el.addEventListener('change', reanalyze); });
+  $('fft-sig').addEventListener('change', renderFft);
+  $('fft-max').addEventListener('input', renderFft);
+  renderOvList();
+
+  /* ---------- redraw triggers ---------- */
+  Array.prototype.forEach.call(document.querySelectorAll('details.acc'), function (d) { d.addEventListener('toggle', function () { if (d.open && D) { renderAnalysis(); } }); });
+  function redrawMinis() { renderCalc(); renderFft(); drawBal(); drawOv(); }
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () { draw(); }).observe($('chart-wrap'));
+    new ResizeObserver(function () { renderCalc(); }).observe($('calc-wrap'));
+    new ResizeObserver(function () { renderFft(); }).observe($('fft-wrap'));
+    new ResizeObserver(function () { drawOv(); }).observe($('ov-wrap'));
+  } else window.addEventListener('resize', function () { draw(); redrawMinis(); });
+  if (window.matchMedia) {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    if (mq.addEventListener) mq.addEventListener('change', function () { draw(); redrawMinis(); });
+  }
+  new MutationObserver(function () { draw(); redrawMinis(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  loadText(exampleCSV(), 'Simulated vertical jump', true);
+})();
+</script>
+
+</body>
+</html>
